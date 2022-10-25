@@ -1,0 +1,29 @@
+{
+  "name": "express-ipc",
+  "version": "1.0.0",
+  "description": "A simple IPC server with express-like request and route handling that also supports broadcasting to multiple channels.",
+  "main": "index.js",
+  "scripts": {
+    "test:watch": "jest --watch",
+    "test": "jest --passWithNoTests",
+    "test:coverage": "jest --coverage",
+    "prepare": "husky install"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/h-sifat/express-ipc.git"
+  },
+  "keywords": [],
+  "author": "Muhammad Sifat Hossain",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/h-sifat/express-ipc/issues"
+  },
+  "homepage": "https://github.com/h-sifat/express-ipc#readme",
+  "devDependencies": {
+    "@types/jest": "^29.2.0",
+    "@types/node": "^18.11.6",
+    "husky": "^8.0.0",
+    "ts-jest": "^29.0.3"
+  }
+}

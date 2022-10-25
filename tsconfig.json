@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "es2016",
+    "module": "commonjs",
+
+    "outDir": "./dist",
+    "sourceMap": false,
+    "declaration": false,
+    "downlevelIteration": false,
+
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "useUnknownInCatchVariables": false
+  },
+
+  "include": ["./src", "./tests"]
+}
