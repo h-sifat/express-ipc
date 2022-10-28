@@ -25,5 +25,8 @@
     "@types/node": "^18.11.6",
     "husky": "^8.0.0",
     "ts-jest": "^29.0.3"
+  },
+  "dependencies": {
+    "handy-types": "^2.0.0"
   }
 }

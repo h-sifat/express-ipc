@@ -7,10 +7,13 @@
     "sourceMap": false,
     "declaration": false,
     "downlevelIteration": false,
+    "esModuleInterop": true,
 
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "useUnknownInCatchVariables": false
+    "useUnknownInCatchVariables": false,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": true
   },
 
   "include": ["./src", "./tests"]
