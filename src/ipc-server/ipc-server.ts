@@ -44,7 +44,6 @@ interface Connection {
 
 export interface RequestHandler_Argument {
   connectionId: number;
-  socket: Socket;
   request: PrimaryGeneralRequest;
 }
 
@@ -205,11 +204,7 @@ export default function makeIPC_ServerClass(
           return;
 
         default:
-          this.#requestHandler({
-            connectionId,
-            socket: connection.socket,
-            request,
-          });
+          this.#requestHandler({ connectionId, request });
       }
     }
 
