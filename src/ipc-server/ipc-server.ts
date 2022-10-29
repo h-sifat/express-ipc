@@ -320,10 +320,16 @@ export default function makeIPC_ServerClass(
           ? { data, type, channel: arg.channel }
           : { data, type };
 
-      const serializedData = JSON.stringify(dataToSend) + this.#DELIMITER;
+      const serializedData = JSON.stringify(dataToSend);
+
+      if (serializedData.includes(this.#DELIMITER))
+        throw new EPP({
+          code: "DELIMITER_IN_RESPONSE",
+          message: `The response object must not contain any string property that contains the delimiter character.`,
+        });
 
       try {
-        connection.socket.write(serializedData);
+        connection.socket.write(serializedData + this.#DELIMITER);
       } catch {}
     }
   };
