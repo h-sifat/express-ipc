@@ -8,6 +8,10 @@ import type { Server, Socket } from "net";
 import { EPP } from "../util";
 import { assert } from "handy-types";
 
+export type IPC_Server_Interface = InstanceType<
+  ReturnType<typeof makeIPC_ServerClass>
+>;
+
 export const VALID_REQUEST_TYPES = Object.freeze([
   "general",
   "subscribe",
@@ -48,7 +52,7 @@ export interface RequestHandler_Argument {
 }
 
 interface IPC_ServerConstructor_Argument {
-  delimiter: string;
+  delimiter?: string;
   socketRoot?: string;
   requestHandler(arg: RequestHandler_Argument): void;
 }
@@ -71,17 +75,20 @@ export interface MakeSocketPath_Argument {
 interface MakeIPC_ServerClass_Argument {
   getSocketRoot(): string;
   resolvePath(...paths: string[]): string;
+  deleteSocketFile(socketPath: string): void;
+  getSocketPath(arg: MakeSocketPath_Argument): string;
   createServer(callback: (socket: Socket) => void): Server;
-  rmSync(path: string, options?: { force: boolean }): void;
-  makeSocketPath(arg: MakeSocketPath_Argument): string;
   validateRequest(request: any): asserts request is SocketRequest;
 }
 
-export default function makeIPC_ServerClass(
-  builderArg: MakeIPC_ServerClass_Argument
-) {
-  const { rmSync, resolvePath, createServer, getSocketRoot, makeSocketPath } =
-    builderArg;
+export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
+  const {
+    resolvePath,
+    createServer,
+    getSocketPath,
+    getSocketRoot,
+    deleteSocketFile,
+  } = builderArg;
   const validateRequest: MakeIPC_ServerClass_Argument["validateRequest"] =
     builderArg.validateRequest;
 
@@ -90,18 +97,47 @@ export default function makeIPC_ServerClass(
     readonly #connections: { [key: number]: Connection } = {};
     readonly #channels: Set<string> = new Set();
 
+    readonly #DELIMITER: string;
     readonly #socketRoot: string;
-    readonly #DELIMITER: IPC_ServerConstructor_Argument["delimiter"];
     readonly #requestHandler: IPC_ServerConstructor_Argument["requestHandler"];
 
     #currentId = 1;
 
+    #socketPath: string | undefined;
+
     constructor(arg: IPC_ServerConstructor_Argument) {
-      this.#DELIMITER = arg.delimiter;
+      this.#DELIMITER = "delimiter" in arg ? arg.delimiter! : "\0";
+
+      assert<string>("non_empty_string", this.#DELIMITER, {
+        name: "delimiter",
+        code: "INVALID_DELIMITER",
+      });
+
+      if (this.#DELIMITER.length !== 1)
+        throw new EPP({
+          code: "INVALID_DELIMITER:NOT_CHAR",
+          message: `The "delimiter" must be a single character.`,
+        });
+
+      assert<IPC_ServerConstructor_Argument["requestHandler"]>(
+        "function",
+        arg.requestHandler,
+        {
+          name: "requestHandler",
+          code: "INVALID_REQUEST_HANDLER",
+        }
+      );
+
       this.#requestHandler = arg.requestHandler;
+
       this.#socketRoot = arg.socketRoot
         ? resolvePath(arg.socketRoot)
         : getSocketRoot();
+
+      assert<string>("non_empty_string", this.#socketRoot, {
+        name: "socketRoot",
+        code: "INVALID_SOCKET_ROOT",
+      });
 
       // initialize server
       this.#server = createServer((connection) => {
@@ -125,13 +161,6 @@ export default function makeIPC_ServerClass(
         connection.on("end", () => this.#removeConnection(id));
         connection.on("close", () => this.#removeConnection(id));
         connection.on("error", () => this.#removeConnection(id));
-      });
-
-      this.#server.on("error", (error) => {
-        try {
-          this.#server.close();
-        } catch {}
-        throw error;
       });
     }
 
@@ -244,21 +273,22 @@ export default function makeIPC_ServerClass(
     listen(
       arg: ({ path: string } | { namespace: string; id: string }) & {
         callback?: () => void;
-        deleteSocketIfExists?: boolean;
+        deleteSocketBeforeListening?: boolean;
       }
     ) {
       const socketPath = (() => {
         if ("path" in arg) return arg.path;
-        return makeSocketPath({
+        return getSocketPath({
           id: arg.id,
           namespace: arg.namespace,
           socketRoot: this.#socketRoot,
         });
       })();
 
-      if (arg.deleteSocketIfExists) rmSync(socketPath, { force: true });
+      if (arg.deleteSocketBeforeListening) deleteSocketFile(socketPath);
 
       this.#server.listen(socketPath, arg.callback || (() => {}));
+      this.#socketPath = socketPath;
     }
 
     on(event: string, listener: (...args: any[]) => void) {
@@ -267,6 +297,8 @@ export default function makeIPC_ServerClass(
 
     close(callback: (err?: Error | null) => void = () => {}) {
       this.#server.close(callback);
+
+      if (this.#socketPath) deleteSocketFile(this.#socketPath);
     }
 
     broadcast(arg: { channel: string; data: object }) {
@@ -305,7 +337,7 @@ export default function makeIPC_ServerClass(
           message: `Invalid response type: "${type}"`,
         });
 
-      assert<object>("plain_object", data, {
+      assert<object>("non_null_object", data, {
         name: "Response data",
         code: "INVALID_RESPONSE_DATA",
       });

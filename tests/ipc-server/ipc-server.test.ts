@@ -1,6 +1,6 @@
-import EventEmitter from "events";
 import path from "path";
-import makeIPC_ServerClass from "../../src/ipc-server/ipc-server";
+import EventEmitter from "events";
+import { makeIPC_ServerClass } from "../../src/ipc-server/ipc-server";
 
 class FakeServer extends EventEmitter {
   #isClosed = false;
@@ -55,11 +55,11 @@ class FakeSocket extends EventEmitter {
 }
 
 const builderArg = Object.freeze({
-  rmSync: jest.fn(),
   createServer: jest.fn(),
   getSocketRoot: jest.fn(),
-  makeSocketPath: jest.fn(),
+  getSocketPath: jest.fn(),
   validateRequest: jest.fn(),
+  deleteSocketFile: jest.fn(),
 });
 const resolvePath = path.resolve;
 const requestHandler = jest.fn();
@@ -81,6 +81,45 @@ beforeEach(() => {
   });
 });
 
+describe("IPC_Server.Constructor", () => {
+  {
+    const validArgObject = Object.freeze({
+      delimiter: "\f",
+      requestHandler: () => {},
+      socketRoot: "/tmp",
+    });
+
+    it.each([
+      {
+        arg: { delimiter: "" },
+        code: "INVALID_DELIMITER",
+        case: "delimiter is not a non empty string",
+      },
+      {
+        arg: { delimiter: "ab" },
+        code: "INVALID_DELIMITER:NOT_CHAR",
+        case: "delimiter is not a single character string",
+      },
+      {
+        arg: { requestHandler: [() => {}] },
+        code: "INVALID_REQUEST_HANDLER",
+        case: "requestHandler is not a function",
+      },
+    ])(`throws ewc "$code" if $case`, ({ arg: invalidArg, code }) => {
+      expect.assertions(1);
+
+      const constructorArg = { ...validArgObject, ...invalidArg };
+
+      try {
+        // @ts-ignore
+        new IPC_Server(constructorArg);
+      } catch (ex) {
+        expect(ex.code).toBe(code);
+      }
+    });
+  }
+});
+
 describe("Server initialization", () => {
   it(`calls the createServer function and adds an "error" event listener on the created server`, () => {
     // resetting all mocks
@@ -89,15 +128,11 @@ describe("Server initialization", () => {
     const fakeServer = new FakeServer();
     builderArg.createServer.mockReturnValueOnce(fakeServer);
 
-    expect(fakeServer.listeners("error")).toHaveLength(0);
-
     new IPC_Server({
       requestHandler,
       socketRoot: "/tmp",
       delimiter: DELIMITER,
     });
-
-    expect(fakeServer.listeners("error")).toHaveLength(1);
 
     expect(builderArg.createServer).toHaveBeenCalledTimes(1);
     expect(builderArg.createServer).toHaveBeenCalledWith(expect.any(Function));
@@ -118,21 +153,21 @@ describe("listen", () => {
 
     expect(fakeServer.listenArg).toEqual({ path, callback });
 
-    expect(builderArg.rmSync).not.toHaveBeenCalled();
-    expect(builderArg.makeSocketPath).not.toHaveBeenCalled();
+    expect(builderArg.deleteSocketFile).not.toHaveBeenCalled();
+    expect(builderArg.getSocketPath).not.toHaveBeenCalled();
   });
 
-  it(`creates the path if not provided from the given socketRoot, namespace, and id`, () => {
+  it(`creates the path from the given socketRoot, namespace, and id if not provided`, () => {
     const callback = () => {};
     const listenArg = Object.freeze({ id: "1", namespace: "pt" });
 
-    const makeSocketPathReturnValue = "/duck";
-    builderArg.makeSocketPath.mockReturnValueOnce(makeSocketPathReturnValue);
+    const getSocketPathReturnValue = "/duck";
+    builderArg.getSocketPath.mockReturnValueOnce(getSocketPathReturnValue);
     ipcServer.listen({ ...listenArg, callback });
 
-    expect(builderArg.rmSync).not.toHaveBeenCalled();
-    expect(builderArg.makeSocketPath).toHaveBeenCalledTimes(1);
-    expect(builderArg.makeSocketPath).toHaveBeenCalledWith({
+    expect(builderArg.deleteSocketFile).not.toHaveBeenCalled();
+    expect(builderArg.getSocketPath).toHaveBeenCalledTimes(1);
+    expect(builderArg.getSocketPath).toHaveBeenCalledWith({
       ...listenArg,
       socketRoot,
     });
@@ -140,7 +175,7 @@ describe("listen", () => {
     const fakeServer = builderArg.createServer.mock.results[0].value;
     expect(fakeServer.listenArg).toEqual({
       callback,
-      path: makeSocketPathReturnValue,
+      path: getSocketPathReturnValue,
     });
   });
 
@@ -148,12 +183,12 @@ describe("listen", () => {
     const path = "/tmp/app.sock";
     const callback = () => {};
 
-    ipcServer.listen({ path, callback, deleteSocketIfExists: true });
+    ipcServer.listen({ path, callback, deleteSocketBeforeListening: true });
 
-    expect(builderArg.rmSync).toHaveBeenCalledTimes(1);
-    expect(builderArg.rmSync).toHaveBeenCalledWith(path, { force: true });
+    expect(builderArg.deleteSocketFile).toHaveBeenCalledTimes(1);
+    expect(builderArg.deleteSocketFile).toHaveBeenCalledWith(path);
 
-    expect(builderArg.makeSocketPath).not.toHaveBeenCalled();
+    expect(builderArg.getSocketPath).not.toHaveBeenCalled();
   });
 });
 
@@ -177,3 +212,5 @@ describe("handling connections", () => {
     expect(socket.listeners("close")).toHaveLength(1);
   });
 });
+
+describe("close", () => {});
