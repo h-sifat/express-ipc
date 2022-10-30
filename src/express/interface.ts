@@ -1,15 +1,14 @@
-export type RequestHandler = (arg: {}) => void;
-export type RequestHandlerRestParameter = (RequestHandler | RequestHandler[])[];
+export type RouteHandler = (arg: {}) => void;
+export type RouteHandlerRestParameter = (RouteHandler | RouteHandler[])[];
 
-export interface RequestHandlersOfPaths {
-  [path: string]: RequestHandler[];
+export interface RouteHandlerGroup {
+  [path: string]: RouteHandler[];
 }
 
-export interface RegisteredRequestHandlers {
-  all: RequestHandlersOfPaths;
-  get: RequestHandlersOfPaths;
-  use: RequestHandlersOfPaths;
-  post: RequestHandlersOfPaths;
-  patch: RequestHandlersOfPaths;
-  delete: RequestHandlersOfPaths;
-}
+export type RegisteredRouteHandlers = Readonly<{
+  all: RouteHandlerGroup;
+  get: RouteHandlerGroup;
+  post: RouteHandlerGroup;
+  patch: RouteHandlerGroup;
+  delete: RouteHandlerGroup;
+}>;

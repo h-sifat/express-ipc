@@ -98,21 +98,5 @@ describe("Functionality", () => {
         expect(register[method][path]).toEqual(flattenHandlers);
       }
     );
-
-    test(`the "use" method registers all the handlers to the root ("/") path`, () => {
-      const register = {
-        all: {},
-        get: {},
-        use: {},
-        post: {},
-        patch: {},
-        delete: {},
-      };
-
-      const registrar = new RequestHandlerRegistrar({ register });
-      registrar.use(...handlers);
-
-      expect(register.use["/"]).toEqual(flattenHandlers);
-    });
   }
 });
