@@ -1,12 +1,15 @@
-import { RequestHandlerRegistrar } from "../../src/express/registrar";
+import { RouteHandlerRegistrar } from "../../src/express/registrar";
 
 const registrarMethods = Object.freeze([
+  "use",
   "all",
   "get",
   "post",
   "patch",
   "delete",
-]); // the "use" method is omitted because it doesn't take any path argument
+]);
+
+const ERROR_HANDLER_FLAG = Symbol();
 
 describe("Validation", () => {
   {
@@ -19,7 +22,10 @@ describe("Validation", () => {
       delete: {},
     };
 
-    const registrar = new RequestHandlerRegistrar({ register });
+    const registrar = new RouteHandlerRegistrar({
+      register,
+      ERROR_HANDLER_FLAG,
+    });
 
     const invalidPaths = ["", [{}], null, 0, {}];
 
@@ -51,11 +57,14 @@ describe("Validation", () => {
       delete: {},
     };
 
-    const registrar = new RequestHandlerRegistrar({ register });
+    const registrar = new RouteHandlerRegistrar({
+      register,
+      ERROR_HANDLER_FLAG,
+    });
 
     const invalidHandlers = ["", [{}], null, 0, {}, [() => {}, [() => {}]]];
 
-    const errorCode = "INVALID_REQUEST_HANDLERS";
+    const errorCode = "INVALID_ROUTE_HANDLERS";
     it.each(registrarMethods)(
       `throws ewc "${errorCode}" if invalid request handler(s) is passed to the %p method`,
       (method) => {
@@ -75,28 +84,48 @@ describe("Validation", () => {
 });
 
 describe("Functionality", () => {
-  {
-    const path = "/categories";
-    const handlers = Object.freeze([() => {}, () => {}, [() => {}], () => {}]);
-    const flattenHandlers = handlers.flat();
+  test.each(registrarMethods)(
+    `the %p method registers all the general and error handlers to the given path`,
+    (method) => {
+      const path = "/categories";
 
-    test.each(registrarMethods)(
-      `the %p method registers all the handlers to the given path`,
-      (method) => {
-        const register = {
-          all: {},
-          get: {},
-          use: {},
-          post: {},
-          patch: {},
-          delete: {},
-        };
+      const generalHandlers = Object.freeze([
+        () => {},
+        () => {},
+        [() => {}],
+        () => {},
+      ]);
+      const flattenedHandlers = generalHandlers.flat();
 
-        const registrar = new RequestHandlerRegistrar({ register });
-        registrar[method](path, ...handlers);
+      const errorHandlers = Object.freeze([[() => {}], () => {}, () => {}]);
+      const flattenedErrorHandlers = errorHandlers.flat();
 
-        expect(register[method][path]).toEqual(flattenHandlers);
-      }
-    );
-  }
+      // marking this handlers as error handlers
+      flattenedErrorHandlers.forEach((handler) => {
+        handler[ERROR_HANDLER_FLAG] = true;
+      });
+
+      const register = {
+        all: {},
+        get: {},
+        use: {},
+        post: {},
+        patch: {},
+        delete: {},
+      };
+
+      const registrar = new RouteHandlerRegistrar({
+        register,
+        ERROR_HANDLER_FLAG,
+      });
+      registrar[method](path, ...generalHandlers, ...errorHandlers);
+
+      expect(register[method][path]).toEqual({
+        path,
+        matcher: expect.any(Function),
+        generalHandlers: flattenedHandlers,
+        errorHandlers: flattenedErrorHandlers,
+      });
+    }
+  );
 });

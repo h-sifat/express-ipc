@@ -1,4 +1,4 @@
-interface PlainObject<Type> {
+export interface PlainObject<Type> {
   [key: string | number]: Type;
 }
 

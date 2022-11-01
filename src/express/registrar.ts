@@ -1,14 +1,25 @@
 import type {
-  RegisteredRouteHandlers,
+  RouteObject,
+  RouteMatcher,
+  RouteHandlersRegister,
   RouteHandlerRestParameter,
 } from "./interface";
+import { EPP } from "../util";
 import { assert } from "handy-types";
+import { match } from "path-to-regexp";
 
-export class RequestHandlerRegistrar {
-  readonly #register: RegisteredRouteHandlers;
+export interface RouteHandlersRegistrarConstructor_Argument {
+  ERROR_HANDLER_FLAG: symbol;
+  register: RouteHandlersRegister;
+}
 
-  constructor(arg: { register: RegisteredRouteHandlers }) {
+export class RouteHandlerRegistrar {
+  readonly #register: RouteHandlersRegister;
+  readonly #ERROR_HANDLER_FLAG: symbol;
+
+  constructor(arg: RouteHandlersRegistrarConstructor_Argument) {
     this.#register = arg.register;
+    this.#ERROR_HANDLER_FLAG = arg.ERROR_HANDLER_FLAG;
   }
 
   get(path: string, ...handlers: RouteHandlerRestParameter) {
@@ -30,42 +41,60 @@ export class RequestHandlerRegistrar {
   all(path: string, ...handlers: RouteHandlerRestParameter) {
     this.#registrar({ path, group: "all", handlers });
   }
+  use(path: string, ...handlers: RouteHandlerRestParameter) {
+    this.#registrar({ path, group: "use", handlers });
+  }
 
   #registrar(arg: {
     path: string;
-    group: keyof RegisteredRouteHandlers;
+    group: keyof RouteHandlersRegister;
     handlers: RouteHandlerRestParameter;
   }) {
     const { path, group, handlers } = arg;
 
-    registerRouteHandlers<RegisteredRouteHandlers>({
-      path,
-      group,
+    assert<string>("non_empty_string", path, {
+      name: "path",
+      code: "INVALID_PATH",
+    });
+
+    if (!(group in this.#register))
+      throw new EPP({
+        code: "UNKNOWN_GROUP",
+        message: `Attempts to register route handlers in unknown group named: "${String(
+          group
+        )}"`,
+      });
+
+    if (!(path in this.#register[group]))
+      this.#register[group][path] = Object.freeze({
+        path,
+        errorHandlers: [],
+        generalHandlers: [],
+        matcher: match(path) as RouteMatcher,
+      });
+
+    registerRouteHandlers({
       handlers,
-      register: this.#register,
+      route: this.#register[group][path],
+      ERROR_HANDLER_FLAG: this.#ERROR_HANDLER_FLAG,
     });
   }
 }
 
-export function registerRouteHandlers<Register extends object>(arg: {
-  path: string;
-  register: Register;
-  group: keyof Register;
-  handlers: (Function | Function[])[];
+export function registerRouteHandlers(arg: {
+  route: RouteObject;
+  ERROR_HANDLER_FLAG: symbol;
+  handlers: RouteHandlerRestParameter;
 }) {
-  const { path, group, register } = arg;
-
-  assert<string>("non_empty_string", path, {
-    name: "path",
-    code: "INVALID_PATH",
-  });
-
   const flattenHandlers = arg.handlers.flat();
   assert.cache<RouteHandlerRestParameter>("function[]", flattenHandlers, {
     name: "Request handlers",
-    code: "INVALID_REQUEST_HANDLERS",
+    code: "INVALID_ROUTE_HANDLERS",
   });
 
-  if (path in register[group]) register[group][path].push(...flattenHandlers);
-  else register[group][path] = flattenHandlers;
+  const { route } = arg;
+
+  for (const handler of flattenHandlers)
+    if (arg.ERROR_HANDLER_FLAG in handler) route.errorHandlers.push(handler);
+    else route.generalHandlers.push(handler);
 }
