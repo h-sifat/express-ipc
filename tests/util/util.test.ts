@@ -1,5 +1,5 @@
 import { cache as schemaCache } from "handy-types";
-import { validate, ValidatorSchema } from "../../src/util";
+import { makeGenerator, validate, ValidatorSchema } from "../../src/util";
 
 describe("validate", () => {
   type User = {
@@ -69,5 +69,16 @@ describe("validate", () => {
     validate({ hobbies: [] }, { schema, name: "object" });
 
     expect(schemaCache.size).toBe(1);
+  });
+});
+
+describe("makeGenerator", () => {
+  it(`makes returns a generator of the given array`, () => {
+    const array = Object.freeze([1, 2, 3]);
+    const generator = makeGenerator(array as any);
+
+    for (const element of array) expect(generator.next().value).toBe(element);
+
+    expect(generator.next().done).toBeTruthy();
   });
 });

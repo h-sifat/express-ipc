@@ -74,3 +74,7 @@ export function validate<Type extends object>(
       message: `Unknown property "${unknownProperty}" in ${objectName}`,
     });
 }
+
+export function* makeGenerator<Type>(array: Type[]): Generator<Type> {
+  for (const route of array) yield route;
+}
