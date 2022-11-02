@@ -22,7 +22,7 @@ function deleteSocketFile(socketPath: string) {
 function makeSocketPath(arg: MakeSocketPath_Argument): string {
   const { id, namespace, socketRoot } = arg;
 
-  const socketPath = path.join(socketRoot, namespace, id);
+  const socketPath = path.join(socketRoot, `${namespace}_${id}`);
 
   return os.type() === "Windows_NT"
     ? path.join("\\\\?\\pipe", socketPath)

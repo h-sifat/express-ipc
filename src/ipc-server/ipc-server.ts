@@ -4,9 +4,9 @@ import type {
   SubscribeChannelsRequest,
   UnsubscribeChannelsRequest,
 } from "../interface";
-import type { Server, Socket } from "net";
 import { EPP } from "../util";
 import { assert } from "handy-types";
+import type { Server, Socket } from "net";
 
 export type IPC_Server_Interface = InstanceType<
   ReturnType<typeof makeIPC_ServerClass>
@@ -30,10 +30,21 @@ export const VALID_RESPONSE_TYPES = Object.freeze([
   "broadcast",
 ] as const);
 
-type SendResponse_Argument = ConnectionId & { data: object } & (
-    | { type: "general" }
-    | { type: "broadcast"; channel: string }
+export type GeneralResponse = ConnectionId & { type: "general" } & (
+    | { data: object; error: null }
+    | { data: null; error: object }
   );
+
+export type BroadcastResponse = ConnectionId & {
+  data: object;
+  channel: string;
+  type: "broadcast";
+};
+
+export type SendResponse_Argument = { endConnection?: boolean } & (
+  | GeneralResponse
+  | BroadcastResponse
+);
 
 interface ConnectionId {
   connectionId: number;
@@ -51,8 +62,8 @@ export interface RequestHandler_Argument {
   request: PrimaryGeneralRequest;
 }
 
-interface IPC_ServerConstructor_Argument {
-  delimiter?: string;
+export interface IPC_ServerConstructor_Argument {
+  delimiter: string;
   socketRoot?: string;
   requestHandler(arg: RequestHandler_Argument): void;
 }
@@ -72,7 +83,7 @@ export interface MakeSocketPath_Argument {
   socketRoot: string;
 }
 
-interface MakeIPC_ServerClass_Argument {
+export interface MakeIPC_ServerClass_Argument {
   getSocketRoot(): string;
   resolvePath(...paths: string[]): string;
   deleteSocketFile(socketPath: string): void;
@@ -102,11 +113,10 @@ export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
     readonly #requestHandler: IPC_ServerConstructor_Argument["requestHandler"];
 
     #currentId = 1;
-
     #socketPath: string | undefined;
 
     constructor(arg: IPC_ServerConstructor_Argument) {
-      this.#DELIMITER = "delimiter" in arg ? arg.delimiter! : "\0";
+      this.#DELIMITER = arg.delimiter;
 
       assert<string>("non_empty_string", this.#DELIMITER, {
         name: "delimiter",
@@ -179,18 +189,20 @@ export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
       const connection = this.#connections[connectionId];
       if (!connection) return;
 
-      const delimiterIdx = receivedData.indexOf(this.#DELIMITER);
-      if (delimiterIdx === -1) {
-        connection.__dataBuffer += receivedData;
-        return;
-      }
+      connection.__dataBuffer += receivedData;
 
-      connection.__dataBuffer += receivedData.slice(0, delimiterIdx);
-      this.#validateAndRouteRequest({
-        connectionId,
-        data: connection.__dataBuffer,
-      });
-      connection.__dataBuffer = receivedData.slice(delimiterIdx + 1);
+      const requests = connection.__dataBuffer.split(this.#DELIMITER);
+
+      // meaning that the current request's incoming data hasn't terminated yet.
+      if (requests.length <= 1) return;
+
+      // the last element holds the most recent request's
+      // unterminated data or an empty string (""). so assign it back to
+      // the __dataBuffer.
+      connection.__dataBuffer = requests.pop()!;
+
+      for (const rawRequestData of requests)
+        this.#validateAndRouteRequest({ connectionId, data: rawRequestData });
     }
 
     #removeConnection(id: number) {
@@ -216,6 +228,7 @@ export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
         validateRequest(request);
       } catch (ex) {
         this.sendResponse({
+          error: null,
           connectionId,
           type: "general",
           data: { error: ex.message },
@@ -248,6 +261,7 @@ export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
         if (this.#channels.has(channel)) connection.channels.add(channel);
 
       this.sendResponse({
+        error: null,
         connectionId,
         type: "general",
         data: { message: `Subscribed to channels: ${channels.join(", ")}` },
@@ -264,18 +278,19 @@ export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
       channels.forEach((channel) => connection.channels.delete(channel));
 
       this.sendResponse({
+        error: null,
         connectionId,
         type: "general",
         data: { message: `Unsubscribed from channels: ${channels.join(", ")}` },
       });
     }
 
-    listen(
+    listen = (
       arg: ({ path: string } | { namespace: string; id: string }) & {
         callback?: () => void;
         deleteSocketBeforeListening?: boolean;
       }
-    ) {
+    ) => {
       const socketPath = (() => {
         if ("path" in arg) return arg.path;
         return getSocketPath({
@@ -289,19 +304,20 @@ export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
 
       this.#server.listen(socketPath, arg.callback || (() => {}));
       this.#socketPath = socketPath;
-    }
+    };
 
-    on(event: string, listener: (...args: any[]) => void) {
+    on = (event: string, listener: (...args: any[]) => void) => {
       this.#server.on(event, listener);
-    }
+    };
 
-    close(callback: (err?: Error | null) => void = () => {}) {
+    close = (callback: (err?: Error | null) => void = () => {}) => {
       this.#server.close(callback);
 
       if (this.#socketPath) deleteSocketFile(this.#socketPath);
-    }
+      this.#socketPath = undefined;
+    };
 
-    broadcast(arg: { channel: string; data: object }) {
+    broadcast = (arg: { channel: string; data: object }) => {
       const { channel, data } = arg;
 
       if (!this.#channels.has(channel))
@@ -310,7 +326,7 @@ export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
           message: `No channel exists with the name: "${channel}"`,
         });
 
-      assert<object>("plain_object", data, {
+      assert<object>("non_null_object", data, {
         name: "Broadcast data",
         code: "INVALID_BROADCAST_DATA",
       });
@@ -323,41 +339,83 @@ export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
             type: "broadcast",
             connectionId: connection.id,
           });
-    }
+    };
 
-    sendResponse(arg: SendResponse_Argument) {
-      const { connectionId, type, data } = arg;
-
-      const connection = this.#connections[connectionId];
+    sendResponse = (arg: SendResponse_Argument) => {
+      const connection = this.#connections[arg.connectionId];
       if (!connection) return;
 
-      if (!VALID_RESPONSE_TYPES.includes(type))
+      if (!VALID_RESPONSE_TYPES.includes(arg.type))
         throw new EPP({
           code: "INVALID_RESPONSE_TYPE",
-          message: `Invalid response type: "${type}"`,
+          message: `Invalid response type: "${arg.type}"`,
         });
 
-      assert<object>("non_null_object", data, {
-        name: "Response data",
-        code: "INVALID_RESPONSE_DATA",
-      });
+      const dataToSend = (() => {
+        const { data, type } = arg;
 
-      const dataToSend =
-        type === "broadcast"
-          ? { data, type, channel: arg.channel }
-          : { data, type };
+        if (type === "broadcast") {
+          assert<object>("non_null_object", data, {
+            name: `Response data`,
+            code: `INVALID_RESPONSE_DATA`,
+          });
+          return { data, type, channel: arg.channel };
+        }
+
+        const { error } = arg;
+
+        /**
+         * data | error | isValid
+         * -----|-------|--------
+         *  object | null | `true`
+         *  null | object | `true`
+         *  null | null | `false`
+         *  object | object | `false`
+         * */
+        const isValidDataAndErrorCombination = Boolean(
+          Number(data === null) ^ Number(error === null)
+        );
+
+        if (!isValidDataAndErrorCombination)
+          throw new EPP({
+            code: "INVALID_DATA_ERROR_COMBINATION",
+            message:
+              `The "data" and "error" property must have alternating value.` +
+              ` Both cannot be null or defined at the same time.`,
+          });
+
+        if (data)
+          assert<object>("non_null_object", data, {
+            name: `Response data`,
+            code: `INVALID_RESPONSE_DATA`,
+          });
+        else
+          assert<object>("plain_object", error, {
+            name: `Response error`,
+            code: `INVALID_RESPONSE_ERROR`,
+          });
+
+        return { data, error, type };
+      })();
 
       const serializedData = JSON.stringify(dataToSend);
 
       if (serializedData.includes(this.#DELIMITER))
         throw new EPP({
           code: "DELIMITER_IN_RESPONSE",
-          message: `The response object must not contain any string property that contains the delimiter character.`,
+          message:
+            `The response object must not contain any value or property ` +
+            `that contains the delimiter character.`,
         });
 
       try {
-        connection.socket.write(serializedData + this.#DELIMITER);
+        connection.socket.write(serializedData + this.#DELIMITER, (_error) => {
+          // I don't know what to do with the error.
+          // At this point I'm literally becoming crazy 😫
+
+          if (arg.endConnection) connection.socket.end();
+        });
       } catch {}
-    }
+    };
   };
 }
