@@ -1,10 +1,9 @@
 import type {
+  MiddleWare,
   RouteObject,
-  ErrorHandler,
   RouteHandlerGroup,
   RequestAndResponse,
-  GeneralRouteHandler,
-  ErrorHandler_Argument,
+  Middleware_Argument,
 } from "./interface";
 import { EPP, makeGenerator } from "../util";
 
@@ -24,8 +23,8 @@ export async function routeRequestToRouteGroup(
 ) {
   const { req, res, getRouteGroup } = arg;
 
-  const routerGroup = getRouteGroup.next().value;
-  if (!routerGroup) return await notFoundHandler({ req, res });
+  const routeGroup = getRouteGroup.next().value;
+  if (!routeGroup) return await notFoundHandler({ req, res });
 
   const moveToNextRouteGroup = () => routeRequestToRouteGroup(arg);
 
@@ -33,7 +32,7 @@ export async function routeRequestToRouteGroup(
     req,
     res,
     moveToNextRouteGroup,
-    getRoute: makeGenerator<RouteObject>(Object.values(routerGroup)),
+    getRoute: makeGenerator<RouteObject>(Object.values(routeGroup)),
   });
 }
 
@@ -56,7 +55,7 @@ export async function routeRequestToRoute(arg: RouteRequestToRoute_Argument) {
   const moveToErrorHandler = (arg: RequestAndResponse & { error: any }) =>
     executeErrorHandler({
       ...arg,
-      getErrorHandler: makeGenerator<ErrorHandler>(route.errorHandlers),
+      getErrorHandler: makeGenerator<MiddleWare>(route.errorHandlers),
     });
 
   const matchResult = route.matcher(req.url);
@@ -70,15 +69,13 @@ export async function routeRequestToRoute(arg: RouteRequestToRoute_Argument) {
     res,
     moveToNextRoute,
     moveToErrorHandler,
-    getGeneralHandler: makeGenerator<GeneralRouteHandler>(
-      route.generalHandlers
-    ),
+    getGeneralHandler: makeGenerator<MiddleWare>(route.generalHandlers),
   });
 }
 
 export type ExecuteGeneralHandler_Argument = RequestAndResponse & {
   moveToNextRoute(): Promise<void>;
-  getGeneralHandler: Generator<GeneralRouteHandler, GeneralRouteHandler>;
+  getGeneralHandler: Generator<MiddleWare, MiddleWare>;
   moveToErrorHandler(arg: RequestAndResponse & { error: any }): Promise<void>;
 };
 
@@ -106,6 +103,7 @@ export async function executeGeneralHandler(
   }
 
   try {
+    // @ts-expect-error intentionally not passing "error" property
     await handler({ req, res, next });
   } catch (ex) {
     if (isNextAlreadyCalled) throw ex;
@@ -114,7 +112,7 @@ export async function executeGeneralHandler(
 }
 
 export async function defaultErrorHandler(
-  arg: Omit<ErrorHandler_Argument, "next">
+  arg: Omit<Middleware_Argument, "next">
 ) {
   const error = {
     code: "INTERNAL_SERVER_ERROR",
@@ -126,7 +124,7 @@ export async function defaultErrorHandler(
 
 export type ExecuteErrorHandler_Argument = RequestAndResponse & {
   error: any;
-  getErrorHandler: Generator<ErrorHandler, ErrorHandler>;
+  getErrorHandler: Generator<MiddleWare, MiddleWare>;
 };
 export async function executeErrorHandler(arg: ExecuteErrorHandler_Argument) {
   const { req, res, error, getErrorHandler } = arg;

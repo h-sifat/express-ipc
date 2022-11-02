@@ -4,11 +4,11 @@ export interface ResponseInterface {
   isSent: boolean;
   send(
     dataOrError: object,
-    options: { type?: "json"; endConnection?: false; isError?: boolean }
+    options?: { type?: "json"; endConnection?: false; isError?: boolean }
   ): void;
 }
 
-export type RequestInterface = PrimaryGeneralRequest & {
+export type RequestInterface = Readonly<Omit<PrimaryGeneralRequest, "type">> & {
   path: string;
   params: PlainObject<unknown>;
 };
@@ -18,22 +18,12 @@ export interface RequestAndResponse {
   res: ResponseInterface;
 }
 
-export type RouteHandler_Argument = RequestAndResponse & {
+export type Middleware_Argument = RequestAndResponse & {
+  error: any;
   next(error?: any): void;
 };
-
-export type GeneralRouteHandler = (
-  arg: RouteHandler_Argument
-) => void | Promise<void>;
-
-export type ErrorHandler_Argument = RouteHandler_Argument & { error: any };
-export type ErrorHandler = (arg: ErrorHandler_Argument) => void | Promise<void>;
-
-export type RouteHandlerRestParameter = (
-  | GeneralRouteHandler
-  | ErrorHandler
-  | (GeneralRouteHandler | ErrorHandler)[]
-)[];
+export type MiddleWare = (arg: Middleware_Argument) => void | Promise<void>;
+export type MiddlewareRestParameter = (MiddleWare | MiddleWare[])[];
 
 export type RouteMatcher = (arg: string) =>
   | {
@@ -45,8 +35,8 @@ export type RouteMatcher = (arg: string) =>
 export type RouteObject = Readonly<{
   path: string;
   matcher: RouteMatcher;
-  errorHandlers: GeneralRouteHandler[];
-  generalHandlers: GeneralRouteHandler[];
+  errorHandlers: MiddleWare[];
+  generalHandlers: MiddleWare[];
 }>;
 
 export interface RouteHandlerGroup {

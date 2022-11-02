@@ -2,7 +2,7 @@ import type {
   RouteObject,
   RouteMatcher,
   RouteHandlersRegister,
-  RouteHandlerRestParameter,
+  MiddlewareRestParameter,
 } from "./interface";
 import { EPP } from "../util";
 import { assert } from "handy-types";
@@ -22,33 +22,33 @@ export class RouteHandlerRegistrar {
     this.#ERROR_HANDLER_FLAG = arg.ERROR_HANDLER_FLAG;
   }
 
-  get(path: string, ...handlers: RouteHandlerRestParameter) {
+  get(path: string, ...handlers: MiddlewareRestParameter) {
     this.#registrar({ path, group: "get", handlers });
   }
 
-  post(path: string, ...handlers: RouteHandlerRestParameter) {
+  post(path: string, ...handlers: MiddlewareRestParameter) {
     this.#registrar({ path, group: "post", handlers });
   }
 
-  patch(path: string, ...handlers: RouteHandlerRestParameter) {
+  patch(path: string, ...handlers: MiddlewareRestParameter) {
     this.#registrar({ path, group: "patch", handlers });
   }
 
-  delete(path: string, ...handlers: RouteHandlerRestParameter) {
+  delete(path: string, ...handlers: MiddlewareRestParameter) {
     this.#registrar({ path, group: "delete", handlers });
   }
 
-  all(path: string, ...handlers: RouteHandlerRestParameter) {
+  all(path: string, ...handlers: MiddlewareRestParameter) {
     this.#registrar({ path, group: "all", handlers });
   }
-  use(path: string, ...handlers: RouteHandlerRestParameter) {
+  use(path: string, ...handlers: MiddlewareRestParameter) {
     this.#registrar({ path, group: "use", handlers });
   }
 
   #registrar(arg: {
     path: string;
     group: keyof RouteHandlersRegister;
-    handlers: RouteHandlerRestParameter;
+    handlers: MiddlewareRestParameter;
   }) {
     const { path, group, handlers } = arg;
 
@@ -84,10 +84,10 @@ export class RouteHandlerRegistrar {
 export function registerRouteHandlers(arg: {
   route: RouteObject;
   ERROR_HANDLER_FLAG: symbol;
-  handlers: RouteHandlerRestParameter;
+  handlers: MiddlewareRestParameter;
 }) {
   const flattenHandlers = arg.handlers.flat();
-  assert.cache<RouteHandlerRestParameter>("function[]", flattenHandlers, {
+  assert.cache<MiddlewareRestParameter>("function[]", flattenHandlers, {
     name: "Request handlers",
     code: "INVALID_ROUTE_HANDLERS",
   });
