@@ -1,3 +1,8 @@
+import { assert } from "handy-types";
+
+import type { PrimaryGeneralRequest } from "../interface";
+import type { RequestInterface } from "../express/interface";
+
 export class EPP extends Error {
   code: string;
 
@@ -8,8 +13,6 @@ export class EPP extends Error {
     this.code = code;
   }
 }
-
-import { assert } from "handy-types";
 
 type ObjectSchemaType = { type: string; required: boolean; cache?: boolean };
 
@@ -77,4 +80,27 @@ export function validate<Type extends object>(
 
 export function* makeGenerator<Type>(array: Type[]): Generator<Type> {
   for (const route of array) yield route;
+}
+
+export function normalizeRawRequest(arg: {
+  excludeProperties?: string[];
+  rawRequest: PrimaryGeneralRequest;
+}): RequestInterface {
+  const { rawRequest, excludeProperties = [] } = arg;
+
+  const request: Partial<RequestInterface> = {
+    path: "/",
+    params: {},
+  };
+
+  for (const property of Object.keys(rawRequest))
+    if (!excludeProperties.includes(property))
+      Object.defineProperty(request, property, {
+        writable: false,
+        enumerable: true,
+        configurable: false,
+        value: rawRequest[property],
+      });
+
+  return request as RequestInterface;
 }

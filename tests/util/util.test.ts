@@ -1,5 +1,10 @@
 import { cache as schemaCache } from "handy-types";
-import { makeGenerator, validate, ValidatorSchema } from "../../src/util";
+import {
+  makeGenerator,
+  normalizeRawRequest,
+  validate,
+  ValidatorSchema,
+} from "../../src/util";
 
 describe("validate", () => {
   type User = {
@@ -80,5 +85,47 @@ describe("makeGenerator", () => {
     for (const element of array) expect(generator.next().value).toBe(element);
 
     expect(generator.next().done).toBeTruthy();
+  });
+});
+
+describe("normalizeRawRequest", () => {
+  const SAMPLE_RAW_REQUEST = Object.freeze({
+    query: {},
+    body: null,
+    headers: {},
+    method: "get",
+    type: "general",
+    url: "/users/:id",
+  });
+
+  it(`makes every property of a request readonly except "path" and "params"`, () => {
+    const rawRequest = { ...SAMPLE_RAW_REQUEST };
+    const request = normalizeRawRequest({ rawRequest });
+
+    const allProps = Object.keys(request);
+    expect.assertions(allProps.length);
+
+    for (const property of allProps)
+      if (!["path", "params"].includes(property))
+        expect(() => {
+          request[property] = "new value";
+        }).toThrow();
+
+    {
+      const testValue = Symbol();
+      for (const property of ["path", "params"]) {
+        request[property] = testValue;
+        expect(request[property]).toBe(testValue);
+      }
+    }
+  });
+
+  it(`excludes properties specified in the "excludeProperties" array`, () => {
+    const property = "method";
+    const request = normalizeRawRequest({
+      rawRequest: { ...SAMPLE_RAW_REQUEST },
+      excludeProperties: [property],
+    });
+    expect(request).not.toHaveProperty(property);
   });
 });

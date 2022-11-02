@@ -15,9 +15,9 @@ export interface UnsubscribeChannelsRequest {
 export type PrimaryGeneralRequest = {
   url: string;
   type: "general";
-  body: PlainObject<any>;
   query: PlainObject<any>;
   headers: PlainObject<any>;
+  body: PlainObject<any> | null;
   method: "get" | "post" | "delete" | "patch";
 };
 
