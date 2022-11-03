@@ -1,3 +1,4 @@
+import { isErrorMiddleware } from "../../src/util";
 import { RouteHandlerRegistrar } from "../../src/express/registrar";
 
 const registrarMethods = Object.freeze([
@@ -24,7 +25,7 @@ describe("Validation", () => {
 
     const registrar = new RouteHandlerRegistrar({
       register,
-      ERROR_HANDLER_FLAG,
+      isErrorMiddleware,
     });
 
     const invalidPaths = ["", [{}], null, 0, {}];
@@ -59,7 +60,7 @@ describe("Validation", () => {
 
     const registrar = new RouteHandlerRegistrar({
       register,
-      ERROR_HANDLER_FLAG,
+      isErrorMiddleware,
     });
 
     const invalidHandlers = ["", [{}], null, 0, {}, [() => {}, [() => {}]]];
@@ -97,7 +98,11 @@ describe("Functionality", () => {
       ]);
       const flattenedHandlers = generalHandlers.flat();
 
-      const errorHandlers = Object.freeze([[() => {}], () => {}, () => {}]);
+      const errorHandlers = Object.freeze([
+        [(a, e) => {}],
+        (a, e) => {},
+        (a, e) => {},
+      ]);
       const flattenedErrorHandlers = errorHandlers.flat();
 
       // marking this handlers as error handlers
@@ -116,7 +121,7 @@ describe("Functionality", () => {
 
       const registrar = new RouteHandlerRegistrar({
         register,
-        ERROR_HANDLER_FLAG,
+        isErrorMiddleware,
       });
       registrar[method](path, ...generalHandlers, ...errorHandlers);
 

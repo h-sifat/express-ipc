@@ -1,4 +1,4 @@
-import type { PrimaryGeneralRequest, PlainObject } from "../interface";
+import type { GeneralRequestPayload, PlainObject } from "../interface";
 
 export interface ResponseInterface {
   isSent: boolean;
@@ -8,21 +8,24 @@ export interface ResponseInterface {
   ): void;
 }
 
-export type RequestInterface = Readonly<Omit<PrimaryGeneralRequest, "type">> & {
+export type ExpressRequest = GeneralRequestPayload & {
   path: string;
   params: PlainObject<unknown>;
 };
 
 export interface RequestAndResponse {
-  req: RequestInterface;
+  req: ExpressRequest;
   res: ResponseInterface;
 }
 
 export type Middleware_Argument = RequestAndResponse & {
-  error: any;
   next(error?: any): void;
 };
-export type MiddleWare = (arg: Middleware_Argument) => void | Promise<void>;
+
+export type MiddleWare = (
+  arg: Middleware_Argument,
+  error: any
+) => any | Promise<any>;
 export type MiddlewareRestParameter = (MiddleWare | MiddleWare[])[];
 
 export type RouteMatcher = (arg: string) =>

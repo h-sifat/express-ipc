@@ -112,14 +112,15 @@ export async function executeGeneralHandler(
 }
 
 export async function defaultErrorHandler(
-  arg: Omit<Middleware_Argument, "next">
+  reqAndRes: Omit<Middleware_Argument, "next">,
+  _error: any
 ) {
-  const error = {
+  const DEFAULT_ERROR = {
     code: "INTERNAL_SERVER_ERROR",
     message: `Internal server error.`,
   };
 
-  arg.res.send(error, { isError: true });
+  reqAndRes.res.send(DEFAULT_ERROR, { isError: true });
 }
 
 export type ExecuteErrorHandler_Argument = RequestAndResponse & {
@@ -130,7 +131,7 @@ export async function executeErrorHandler(arg: ExecuteErrorHandler_Argument) {
   const { req, res, error, getErrorHandler } = arg;
 
   const errorHandler = getErrorHandler.next().value;
-  if (!errorHandler) return await defaultErrorHandler({ req, res, error });
+  if (!errorHandler) return await defaultErrorHandler({ req, res }, error);
 
   let isNextAlreadyCalled = false;
   async function next(modifiedError = error) {
@@ -144,5 +145,5 @@ export async function executeErrorHandler(arg: ExecuteErrorHandler_Argument) {
     await executeErrorHandler({ ...arg, error: modifiedError });
   }
 
-  await errorHandler({ req, res, error, next });
+  await errorHandler({ req, res, next }, error);
 }

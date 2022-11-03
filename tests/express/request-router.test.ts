@@ -284,12 +284,10 @@ describe("Error Handling", () => {
 
       expect(generalHandler).toHaveBeenCalledTimes(1);
       expect(errorHandler).toHaveBeenCalledTimes(1);
-      expect(errorHandler).toHaveBeenCalledWith({
-        req,
-        res,
-        error: ERROR,
-        next: expect.any(Function),
-      });
+      expect(errorHandler).toHaveBeenCalledWith(
+        { req, res, next: expect.any(Function) },
+        ERROR
+      );
     }
   );
 
@@ -323,20 +321,16 @@ describe("Error Handling", () => {
 
     expect(generalHandler).toHaveBeenCalledTimes(1);
     expect(firstErrorHandler).toHaveBeenCalledTimes(1);
-    expect(firstErrorHandler).toHaveBeenCalledWith({
-      req,
-      res,
-      error: ERROR,
-      next: expect.any(Function),
-    });
+    expect(firstErrorHandler).toHaveBeenCalledWith(
+      { req, res, next: expect.any(Function) },
+      ERROR
+    );
 
     expect(secondErrorHandler).toHaveBeenCalledTimes(1);
-    expect(secondErrorHandler).toHaveBeenCalledWith({
-      req,
-      res,
-      error: MODIFIED_ERROR,
-      next: expect.any(Function),
-    });
+    expect(secondErrorHandler).toHaveBeenCalledWith(
+      { req, res, next: expect.any(Function) },
+      MODIFIED_ERROR
+    );
   });
 
   it(`routes request to the defaultErrorHandler if a custom error middleware calls next and no more custom errMiddleware exists`, async () => {

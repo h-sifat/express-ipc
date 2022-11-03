@@ -1,19 +1,94 @@
-import { validateRequest } from "../../src/ipc-server/validator";
+import {
+  validateRequestPayload,
+  validateRequestMetadata,
+} from "../../src/ipc-server/validator";
 
-describe("validateRequest", () => {
-  const subscribeRequest = Object.freeze({
-    type: "subscribe",
+describe("validateRequestMetadata", () => {
+  it.each([
+    {
+      metadata: null,
+      errorCode: "INVALID_REQUEST_METADATA",
+      case: "is not a plain object",
+    },
+    {
+      metadata: ["not_plain_object"],
+      errorCode: "INVALID_REQUEST_METADATA",
+      case: "is not a plain object",
+    },
+    {
+      metadata: {},
+      errorCode: "MISSING_PROPERTY",
+      case: "is missing any required property",
+    },
+    {
+      metadata: { id: "1" },
+      errorCode: "MISSING_PROPERTY",
+      case: "is missing any required property",
+    },
+    {
+      metadata: { id: 1 },
+      errorCode: "INVALID_PROPERTY",
+      case: "id not a non_empty_string string",
+    },
+    {
+      metadata: { id: "" },
+      errorCode: "INVALID_PROPERTY",
+      case: "id not a non_empty_string string",
+    },
+    {
+      metadata: { id: "342", category: "" },
+      errorCode: "INVALID_PROPERTY",
+      case: "category not a non_empty_string string",
+    },
+    {
+      metadata: { id: "342", category: "unknown_cat" },
+      errorCode: "INVALID_REQUEST_CATEGORY",
+      case: "category is not valid",
+    },
+    {
+      metadata: { category: "general" },
+      errorCode: "MISSING_PROPERTY",
+      case: "is missing any required property",
+    },
+  ])(
+    `throws error ("$errorCode") if metadata $case`,
+    ({ metadata, errorCode }) => {
+      expect.assertions(1);
+      try {
+        validateRequestMetadata(metadata);
+      } catch (ex) {
+        expect(ex.code).toBe(errorCode);
+      }
+    }
+  );
+
+  {
+    const id = "1";
+    const validMetadata = [
+      { id, category: "general" },
+      { id, category: "subscribe" },
+      { id, category: "unsubscribe" },
+    ];
+
+    it(`doesn't throw error if metadata is valid`, () => {
+      expect(() => {
+        for (const metadata of validMetadata) validateRequestMetadata(metadata);
+      }).not.toThrow();
+    });
+  }
+});
+
+describe("validateRequestPayload", () => {
+  const subscribePayload = Object.freeze({
     channels: ["tui"],
   });
 
-  const unsubscribeRequest = Object.freeze({
-    type: "unsubscribe",
+  const unsubscribePayload = Object.freeze({
     channels: ["tui"],
   });
 
-  const generalRequest = Object.freeze({
+  const generalRequestPayload = Object.freeze({
     method: "patch",
-    type: "general",
     url: "/users/34",
     query: { lookup: "self" },
     body: { name: "Alex", age: 98 },
@@ -22,75 +97,84 @@ describe("validateRequest", () => {
 
   it.each([
     {
-      case: `request "type" is not valid`,
-      request: { ...subscribeRequest, type: "duck" },
-      errorCode: "INVALID_REQUEST_TYPE",
-    },
-    {
-      errorCode: "INVALID_REQUEST_TYPE",
-      case: `request "type" is not valid`,
-      request: { ...generalRequest, type: "not-a-valid-type" },
-    },
-    {
+      category: "subscribe",
       errorCode: "INVALID_PROPERTY",
-      request: { ...subscribeRequest, channels: null },
+      payload: { ...subscribePayload, channels: null },
       case: `subscribeRequest.channels is not a non empty string array`,
     },
     {
+      category: "subscribe",
       errorCode: "INVALID_PROPERTY",
-      request: { ...subscribeRequest, channels: ["hi", 1] },
+      payload: { ...subscribePayload, channels: ["hi", 1] },
       case: `subscribeRequest.channels is not a non empty string array`,
     },
     {
+      category: "unsubscribe",
       errorCode: "INVALID_PROPERTY",
-      request: { ...unsubscribeRequest, channels: null },
+      payload: { ...unsubscribePayload, channels: null },
       case: `unsubscribeRequest.channels is not a non empty string array`,
     },
     {
+      category: "unsubscribe",
       errorCode: "INVALID_PROPERTY",
-      request: { ...unsubscribeRequest, channels: ["hi", 1] },
+      payload: { ...unsubscribePayload, channels: ["hi", 1] },
       case: `unsubscribeRequest.channels is not a non empty string array`,
     },
     {
+      category: "general",
       errorCode: "INVALID_REQUEST_METHOD",
-      request: { ...generalRequest, method: "head" },
       case: `generalRequest.method is not valid`,
+      payload: { ...generalRequestPayload, method: "head" },
     },
     {
+      category: "general",
       errorCode: "INVALID_PROPERTY",
-      request: { ...generalRequest, body: null },
-      case: `generalRequest.body is not a non_null_object`,
+      case: `generalRequest.body is not an object`,
+      payload: { ...generalRequestPayload, body: "not an object" },
     },
     {
+      category: "general",
       errorCode: "INVALID_PROPERTY",
-      request: { ...generalRequest, headers: [{ a: 1 }] },
+      payload: { ...generalRequestPayload, headers: [{ a: 1 }] },
       case: `generalRequest.headers is not a plain_object`,
     },
     {
+      category: "general",
       errorCode: "INVALID_PROPERTY",
-      request: { ...generalRequest, query: [{ a: 1 }] },
+      payload: { ...generalRequestPayload, query: [{ a: 1 }] },
       case: `generalRequest.query is not a plain_object`,
     },
     {
+      category: "general",
       errorCode: "INVALID_PROPERTY",
-      request: { ...generalRequest, url: "" },
+      payload: { ...generalRequestPayload, url: "" },
       case: `generalRequest.url is not a non_empty_string`,
     },
-  ])(`throw ewc "$errorCode" if $case`, ({ request, errorCode }) => {
+  ])(`throw ewc "$errorCode" if $case`, ({ payload, category, errorCode }) => {
     expect.assertions(1);
     try {
-      validateRequest(request);
+      validateRequestPayload(payload, category as any);
     } catch (ex) {
       expect(ex.code).toBe(errorCode);
     }
   });
 
-  it.each([generalRequest, subscribeRequest, unsubscribeRequest])(
-    "doesn't throw error for valid requests",
-    (request) => {
-      expect(() => {
-        validateRequest(request);
-      }).not.toThrow();
-    }
-  );
+  it.each([
+    {
+      payload: generalRequestPayload,
+      category: "general",
+    },
+    {
+      payload: subscribePayload,
+      category: "subscribe",
+    },
+    {
+      payload: unsubscribePayload,
+      category: "unsubscribe",
+    },
+  ])("doesn't throw error for valid payloads", ({ payload, category }) => {
+    expect(() => {
+      validateRequestPayload(payload, category as any);
+    }).not.toThrow();
+  });
 });

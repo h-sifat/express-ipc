@@ -1,21 +1,30 @@
 import type {
+  ConnectionId,
+  IPC_ServerClass,
+  Listen_Argument,
+  IPC_ServerInterface,
+  SendResponse_Argument,
+  IPC_ServerConstructor_Argument,
+} from "./interface";
+import type {
   SocketRequest,
-  PrimaryGeneralRequest,
   SubscribeChannelsRequest,
   UnsubscribeChannelsRequest,
 } from "../interface";
+
 import { EPP } from "../util";
 import { assert } from "handy-types";
 import type { Server, Socket } from "net";
 
-export type IPC_Server_Interface = InstanceType<
-  ReturnType<typeof makeIPC_ServerClass>
->;
-
-export const VALID_REQUEST_TYPES = Object.freeze([
+export const VALID_REQUEST_CATEGORIES = Object.freeze([
   "general",
   "subscribe",
   "unsubscribe",
+] as const);
+
+export const VALID_RESPONSE_CATEGORIES = Object.freeze([
+  "broadcast",
+  ...VALID_REQUEST_CATEGORIES,
 ] as const);
 
 export const VALID_REQUEST_METHODS = Object.freeze([
@@ -25,52 +34,12 @@ export const VALID_REQUEST_METHODS = Object.freeze([
   "patch",
 ] as const);
 
-export const VALID_RESPONSE_TYPES = Object.freeze([
-  "general",
-  "broadcast",
-] as const);
-
-export type GeneralResponse = ConnectionId & { type: "general" } & (
-    | { data: object; error: null }
-    | { data: null; error: object }
-  );
-
-export type BroadcastResponse = ConnectionId & {
-  data: object;
-  channel: string;
-  type: "broadcast";
-};
-
-export type SendResponse_Argument = { endConnection?: boolean } & (
-  | GeneralResponse
-  | BroadcastResponse
-);
-
-interface ConnectionId {
-  connectionId: number;
-}
-
 interface Connection {
   id: number;
   socket: Socket;
   __dataBuffer: string;
   channels: Set<string>;
 }
-
-export interface RequestHandler_Argument {
-  connectionId: number;
-  request: PrimaryGeneralRequest;
-}
-
-export interface IPC_ServerConstructor_Argument {
-  delimiter: string;
-  socketRoot?: string;
-  requestHandler(arg: RequestHandler_Argument): void;
-}
-
-type SubscribeUnsubscribe_Argument = ConnectionId & {
-  request: SubscribeChannelsRequest | UnsubscribeChannelsRequest;
-};
 
 interface HandleIncomingData_Argument {
   connectionId: number;
@@ -84,36 +53,47 @@ export interface MakeSocketPath_Argument {
 }
 
 export interface MakeIPC_ServerClass_Argument {
-  getSocketRoot(): string;
-  resolvePath(...paths: string[]): string;
+  validateRequestMetadata(
+    metadata: unknown
+  ): asserts metadata is SocketRequest["metadata"];
+
+  validateRequestPayload(
+    payload: unknown,
+    category: SocketRequest["metadata"]["category"]
+  ): asserts payload is SocketRequest["payload"];
+
   deleteSocketFile(socketPath: string): void;
   getSocketPath(arg: MakeSocketPath_Argument): string;
   createServer(callback: (socket: Socket) => void): Server;
-  validateRequest(request: any): asserts request is SocketRequest;
 }
 
-export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
-  const {
-    resolvePath,
-    createServer,
-    getSocketPath,
-    getSocketRoot,
-    deleteSocketFile,
-  } = builderArg;
-  const validateRequest: MakeIPC_ServerClass_Argument["validateRequest"] =
-    builderArg.validateRequest;
+export function makeIPC_ServerClass(
+  builderArg: MakeIPC_ServerClass_Argument
+): IPC_ServerClass {
+  const { createServer, getSocketPath, deleteSocketFile } = builderArg;
 
-  return class IPC_Server {
+  const validateRequestPayload: MakeIPC_ServerClass_Argument["validateRequestPayload"] =
+    builderArg.validateRequestPayload;
+  const validateRequestMetadata: MakeIPC_ServerClass_Argument["validateRequestMetadata"] =
+    builderArg.validateRequestMetadata;
+
+  return class IPC_Server implements IPC_ServerInterface {
     readonly #server: Server;
-    readonly #connections: { [key: number]: Connection } = {};
     readonly #channels: Set<string> = new Set();
+    readonly #connections: { [key: number]: Connection } = {};
 
     readonly #DELIMITER: string;
     readonly #socketRoot: string;
-    readonly #requestHandler: IPC_ServerConstructor_Argument["requestHandler"];
+    readonly #generalRequestHandler: IPC_ServerConstructor_Argument["requestHandler"];
 
     #currentId = 1;
     #socketPath: string | undefined;
+
+    readonly #requestHandlersByCategory = Object.freeze({
+      general: (arg: any) => this.#generalRequestHandler(arg),
+      subscribe: (arg: any) => this.#subscribeRequestHandler(arg),
+      unsubscribe: (arg: any) => this.#unsubscribeRequestHandler(arg),
+    } as const);
 
     constructor(arg: IPC_ServerConstructor_Argument) {
       this.#DELIMITER = arg.delimiter;
@@ -138,16 +118,13 @@ export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
         }
       );
 
-      this.#requestHandler = arg.requestHandler;
-
-      this.#socketRoot = arg.socketRoot
-        ? resolvePath(arg.socketRoot)
-        : getSocketRoot();
-
+      this.#socketRoot = arg.socketRoot;
       assert<string>("non_empty_string", this.#socketRoot, {
         name: "socketRoot",
         code: "INVALID_SOCKET_ROOT",
       });
+
+      this.#generalRequestHandler = arg.requestHandler;
 
       // initialize server
       this.#server = createServer((connection) => {
@@ -216,8 +193,8 @@ export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
     }
 
     #validateAndRouteRequest({
-      connectionId,
       data,
+      connectionId,
     }: ConnectionId & { data: string }) {
       const connection = this.#connections[connectionId];
       if (!connection) return;
@@ -225,79 +202,94 @@ export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
       let request: SocketRequest;
       try {
         request = JSON.parse(data);
-        validateRequest(request);
+        validateRequestMetadata(request?.metadata);
       } catch (ex) {
         this.sendResponse({
-          error: null,
           connectionId,
-          type: "general",
-          data: { error: ex.message },
+          response: {
+            payload: { message: ex.message, code: ex.code || "" },
+            metadata: { id: "unknown", category: "general", isError: true },
+          },
         });
-
         return;
       }
 
-      switch (request.type) {
-        case "subscribe":
-          this.#subscribeRequestHandler({ connectionId, request });
-          return;
-        case "unsubscribe":
-          this.#unsubscribeRequestHandler({ connectionId, request });
-          return;
-
-        default:
-          this.#requestHandler({ connectionId, request });
+      try {
+        validateRequestPayload(request.payload, request.metadata.category);
+      } catch (ex) {
+        this.sendResponse({
+          connectionId,
+          response: {
+            metadata: { ...request.metadata, isError: true },
+            payload: { message: ex.message, code: ex.code || "" },
+          },
+        });
+        return;
       }
+
+      this.#requestHandlersByCategory[request.metadata.category]({
+        request,
+        connectionId,
+      });
     }
 
-    #subscribeRequestHandler(arg: SubscribeUnsubscribe_Argument) {
-      const { connectionId } = arg;
-      const { channels } = arg.request;
+    #subscribeRequestHandler(
+      arg: ConnectionId & { request: SubscribeChannelsRequest }
+    ) {
+      const { connectionId, request } = arg;
 
       const connection = this.#connections[connectionId];
       if (!connection) return;
 
-      for (const channel of channels)
+      for (const channel of request.payload.channels)
         if (this.#channels.has(channel)) connection.channels.add(channel);
 
+      const message =
+        `Subscribed to channels: ` + `${request.payload.channels.join(", ")}`;
       this.sendResponse({
-        error: null,
         connectionId,
-        type: "general",
-        data: { message: `Subscribed to channels: ${channels.join(", ")}` },
+        response: {
+          payload: { message },
+          metadata: { ...request.metadata, isError: false },
+        },
       });
     }
 
-    #unsubscribeRequestHandler(arg: SubscribeUnsubscribe_Argument) {
-      const { connectionId } = arg;
-      const { channels } = arg.request;
+    #unsubscribeRequestHandler(
+      arg: ConnectionId & { request: UnsubscribeChannelsRequest }
+    ) {
+      const { connectionId, request } = arg;
 
       const connection = this.#connections[connectionId];
       if (!connection) return;
 
-      channels.forEach((channel) => connection.channels.delete(channel));
+      request.payload.channels.forEach((channel) =>
+        connection.channels.delete(channel)
+      );
+
+      const message =
+        `Unsubscribed from channels: ` +
+        `${request.payload.channels.join(", ")}`;
 
       this.sendResponse({
-        error: null,
         connectionId,
-        type: "general",
-        data: { message: `Unsubscribed from channels: ${channels.join(", ")}` },
+        response: {
+          payload: { message },
+          metadata: { ...request.metadata, isError: false },
+        },
       });
     }
 
-    listen = (
-      arg: ({ path: string } | { namespace: string; id: string }) & {
-        callback?: () => void;
-        deleteSocketBeforeListening?: boolean;
-      }
-    ) => {
+    listen = (arg: Listen_Argument) => {
       const socketPath = (() => {
-        if ("path" in arg) return arg.path;
-        return getSocketPath({
-          id: arg.id,
-          namespace: arg.namespace,
-          socketRoot: this.#socketRoot,
-        });
+        const { path } = arg;
+        return typeof path === "string"
+          ? path
+          : getSocketPath({
+              id: path.id,
+              namespace: path.namespace,
+              socketRoot: this.#socketRoot,
+            });
       })();
 
       if (arg.deleteSocketBeforeListening) deleteSocketFile(socketPath);
@@ -334,10 +326,11 @@ export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
       for (const connection of Object.values(this.#connections) as Connection[])
         if (connection.channels.has(channel))
           this.sendResponse({
-            data,
-            channel,
-            type: "broadcast",
             connectionId: connection.id,
+            response: {
+              payload: data,
+              metadata: { channel, category: "broadcast" },
+            },
           });
     };
 
@@ -345,60 +338,19 @@ export function makeIPC_ServerClass(builderArg: MakeIPC_ServerClass_Argument) {
       const connection = this.#connections[arg.connectionId];
       if (!connection) return;
 
-      if (!VALID_RESPONSE_TYPES.includes(arg.type))
+      const { response } = arg;
+      if (!VALID_RESPONSE_CATEGORIES.includes(response.metadata.category))
         throw new EPP({
-          code: "INVALID_RESPONSE_TYPE",
-          message: `Invalid response type: "${arg.type}"`,
+          code: "INVALID_RESPONSE_CATEGORY",
+          message: `Invalid response category: "${response.metadata.category}"`,
         });
 
-      const dataToSend = (() => {
-        const { data, type } = arg;
+      assert<object>("non_null_object", response.payload, {
+        name: "Response payload",
+        code: "INVALID_RESPONSE_PAYLOAD",
+      });
 
-        if (type === "broadcast") {
-          assert<object>("non_null_object", data, {
-            name: `Response data`,
-            code: `INVALID_RESPONSE_DATA`,
-          });
-          return { data, type, channel: arg.channel };
-        }
-
-        const { error } = arg;
-
-        /**
-         * data | error | isValid
-         * -----|-------|--------
-         *  object | null | `true`
-         *  null | object | `true`
-         *  null | null | `false`
-         *  object | object | `false`
-         * */
-        const isValidDataAndErrorCombination = Boolean(
-          Number(data === null) ^ Number(error === null)
-        );
-
-        if (!isValidDataAndErrorCombination)
-          throw new EPP({
-            code: "INVALID_DATA_ERROR_COMBINATION",
-            message:
-              `The "data" and "error" property must have alternating value.` +
-              ` Both cannot be null or defined at the same time.`,
-          });
-
-        if (data)
-          assert<object>("non_null_object", data, {
-            name: `Response data`,
-            code: `INVALID_RESPONSE_DATA`,
-          });
-        else
-          assert<object>("plain_object", error, {
-            name: `Response error`,
-            code: `INVALID_RESPONSE_ERROR`,
-          });
-
-        return { data, error, type };
-      })();
-
-      const serializedData = JSON.stringify(dataToSend);
+      const serializedData = JSON.stringify(response);
 
       if (serializedData.includes(this.#DELIMITER))
         throw new EPP({

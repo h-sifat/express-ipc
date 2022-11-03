@@ -1,63 +1,83 @@
 import type {
   SocketRequest,
-  PrimaryGeneralRequest,
+  GeneralRequestPayload,
   SubscribeChannelsRequest,
   UnsubscribeChannelsRequest,
 } from "../interface";
+import { assert } from "handy-types";
 import { EPP, validate } from "../util";
 import type { ValidatorSchema } from "../util";
-import { VALID_REQUEST_METHODS, VALID_REQUEST_TYPES } from "./ipc-server";
+import { VALID_REQUEST_METHODS, VALID_REQUEST_CATEGORIES } from "./ipc-server";
 
-const subscribeAndUnsubscribeRequestSchema: Readonly<
-  ValidatorSchema<SubscribeChannelsRequest>
+const requestMetaDataSchema: Readonly<
+  ValidatorSchema<SocketRequest["metadata"]>
 > = Object.freeze({
-  type: "non_empty_string",
-  channels: {
-    cache: true,
-    required: true,
-    type: "non_empty_string[]",
-  },
+  id: "non_empty_string",
+  category: "non_empty_string",
 });
 
-const primaryGeneralRequestSchema: Readonly<
-  ValidatorSchema<PrimaryGeneralRequest>
+const subscribeAndUnsubscribeRequestPayloadSchema: Readonly<
+  ValidatorSchema<SubscribeChannelsRequest["payload"]>
 > = Object.freeze({
-  body: "non_null_object",
+  channels: { type: "non_empty_string[]", required: true, cache: true },
+});
+
+const generalRequestPayloadSchema: Readonly<
+  ValidatorSchema<GeneralRequestPayload>
+> = Object.freeze({
+  body: "object",
   query: "plain_object",
   headers: "plain_object",
   url: "non_empty_string",
-  type: "non_empty_string",
   method: "non_empty_string",
 });
 
-export function validateRequest(
-  request: any
-): asserts request is SocketRequest {
-  if (!VALID_REQUEST_TYPES.includes(request?.type))
-    throw new EPP({
-      code: "INVALID_REQUEST_TYPE",
-      message: `Invalid request type: "${request.type}"`,
-    });
+export function validateRequestMetadata(
+  metadata: unknown
+): asserts metadata is SocketRequest["metadata"] {
+  assert<object>("plain_object", metadata, {
+    name: "Request metadata",
+    code: "INVALID_REQUEST_METADATA",
+  });
 
-  switch (request.type as SocketRequest["type"]) {
+  validate<SocketRequest["metadata"]>(metadata, {
+    name: "Request metadata",
+    schema: requestMetaDataSchema,
+  });
+
+  if (!VALID_REQUEST_CATEGORIES.includes(metadata.category))
+    throw new EPP({
+      code: "INVALID_REQUEST_CATEGORY",
+      message: `Invalid request category: "${metadata.category}"`,
+    });
+}
+
+export function validateRequestPayload(
+  payload: unknown,
+  category: SocketRequest["metadata"]["category"]
+): asserts payload is SocketRequest["payload"] {
+  switch (category) {
     case "subscribe":
     case "unsubscribe":
-      validate<SubscribeChannelsRequest | UnsubscribeChannelsRequest>(request, {
-        name: "Request",
-        schema: subscribeAndUnsubscribeRequestSchema,
+      validate<
+        | SubscribeChannelsRequest["payload"]
+        | UnsubscribeChannelsRequest["payload"]
+      >(payload, {
+        name: "Request payload",
+        schema: subscribeAndUnsubscribeRequestPayloadSchema,
       });
       return;
 
     case "general":
-      validate<PrimaryGeneralRequest>(request, {
-        name: "Request",
-        schema: primaryGeneralRequestSchema,
+      validate<GeneralRequestPayload>(payload, {
+        name: "Request payload",
+        schema: generalRequestPayloadSchema,
       });
 
-      if (!VALID_REQUEST_METHODS.includes(request.method))
+      if (!VALID_REQUEST_METHODS.includes(payload.method))
         throw new EPP({
           code: "INVALID_REQUEST_METHOD",
-          message: `Invalid request method: ${request.method}`,
+          message: `Invalid request method: ${payload.method}`,
         });
   }
 }

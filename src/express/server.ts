@@ -6,16 +6,18 @@ import type {
   MiddlewareRestParameter,
 } from "./interface";
 import type {
-  IPC_Server_Interface,
+  IPC_ServerInterface,
   RequestHandler_Argument,
   IPC_ServerConstructor_Argument,
-} from "../ipc-server/ipc-server";
-import type { PrimaryGeneralRequest } from "../interface";
+} from "../ipc-server/interface";
+import type { GeneralRequestPayload } from "../interface";
+
+import os from "os";
 
 import { Response } from "./response";
 import { IPC_Server } from "../ipc-server";
-import { normalizeRawRequest } from "../util";
 import { routeRequestToRouteGroup } from "./request-router";
+import { isErrorMiddleware, normalizeRawRequest } from "../util";
 import { registerRouteHandlers, RouteHandlerRegistrar } from "./registrar";
 
 export type ExpressConstructor_Argument = Omit<
@@ -23,10 +25,8 @@ export type ExpressConstructor_Argument = Omit<
   "requestHandler"
 >;
 
-const ERROR_HANDLER_FLAG = Symbol();
-
 export class ExpressIPCServer extends RouteHandlerRegistrar {
-  readonly #server: IPC_Server_Interface;
+  readonly #server: IPC_ServerInterface;
   readonly #register: RouteHandlersRegister;
   readonly #appLevelRoute: RouteObject = Object.freeze({
     path: "/",
@@ -35,12 +35,12 @@ export class ExpressIPCServer extends RouteHandlerRegistrar {
     matcher: () => ({ path: "/", params: {} }),
   });
 
-  readonly on: IPC_Server_Interface["on"];
-  readonly close: IPC_Server_Interface["close"];
-  readonly listen: IPC_Server_Interface["listen"];
-  readonly broadcast: IPC_Server_Interface["broadcast"];
+  readonly on: IPC_ServerInterface["on"];
+  readonly close: IPC_ServerInterface["close"];
+  readonly listen: IPC_ServerInterface["listen"];
+  readonly broadcast: IPC_ServerInterface["broadcast"];
 
-  constructor(arg: ExpressConstructor_Argument) {
+  constructor(arg: ExpressConstructor_Argument = {}) {
     const register = Object.freeze({
       use: {},
       all: {},
@@ -50,18 +50,14 @@ export class ExpressIPCServer extends RouteHandlerRegistrar {
       delete: {},
     });
 
-    super({ register, ERROR_HANDLER_FLAG });
+    super({ register, isErrorMiddleware });
     this.#register = register;
 
-    {
-      const serverArg: any = {
-        delimiter: arg.delimiter || "\f",
-        requestHandler: this.#rawRequestHandler,
-      };
-      if ("socketRoot" in arg) serverArg.socketRoot = arg.socketRoot;
-
-      this.#server = new IPC_Server(serverArg);
-    }
+    this.#server = new IPC_Server({
+      delimiter: arg.delimiter || "\f",
+      requestHandler: this.#requestHandler,
+      socketRoot: arg.socketRoot || os.tmpdir(),
+    });
 
     this.on = this.#server.on;
     this.close = this.#server.close;
@@ -69,28 +65,28 @@ export class ExpressIPCServer extends RouteHandlerRegistrar {
     this.broadcast = this.#server.broadcast;
   }
 
-  #rawRequestHandler = (arg: RequestHandler_Argument) => {
-    const { connectionId, request: rawRequest } = arg;
+  #requestHandler = (arg: RequestHandler_Argument) => {
+    const { connectionId, request } = arg;
 
-    const response = new Response({
+    const expressResponse = new Response({
       connectionId,
+      metadata: request.metadata,
       sendResponse: this.#server.sendResponse,
     });
 
-    const request = normalizeRawRequest({
-      rawRequest,
-      excludeProperties: ["type"],
-    });
+    const expressRequest = normalizeRawRequest({ rawRequest: request.payload });
 
     routeRequestToRouteGroup({
-      req: request,
-      res: response,
-      getRouteGroup: this.getRouteGroupStack({ method: request.method }),
+      req: expressRequest,
+      res: expressResponse,
+      getRouteGroup: this.getRouteGroupStack({
+        method: request.payload.method,
+      }),
     });
   };
 
   *getRouteGroupStack(arg: {
-    method: PrimaryGeneralRequest["method"];
+    method: GeneralRequestPayload["method"];
   }): Generator<RouteHandlerGroup> {
     const { method } = arg;
     yield { "/": this.#appLevelRoute };
@@ -103,7 +99,7 @@ export class ExpressIPCServer extends RouteHandlerRegistrar {
   ) {
     if (typeof firstArg !== "string") {
       registerRouteHandlers({
-        ERROR_HANDLER_FLAG,
+        isErrorMiddleware,
         route: this.#appLevelRoute,
         handlers: [firstArg, ...handlers],
       });
@@ -113,9 +109,4 @@ export class ExpressIPCServer extends RouteHandlerRegistrar {
 
     super.use(firstArg, ...handlers);
   }
-}
-
-export function $errorMiddleware(middleware: MiddleWare) {
-  middleware[ERROR_HANDLER_FLAG] = true;
-  return middleware;
 }

@@ -2,11 +2,12 @@ import { Response } from "../../src/express/response";
 
 const connectionId = 123;
 const sendResponse = jest.fn();
+const metadata = Object.freeze({ id: "1", category: "general" });
 
 let response: Response;
 
 beforeEach(() => {
-  response = new Response({ connectionId, sendResponse });
+  response = new Response({ connectionId, sendResponse, metadata });
   sendResponse.mockReset();
 });
 
@@ -29,20 +30,22 @@ describe("send", () => {
       {
         sendArgs: [data],
         expectedSendResponseArg: {
-          data,
-          error: null,
           connectionId,
-          type: "general",
+          response: {
+            payload: data,
+            metadata: { ...metadata, isError: false },
+          },
           endConnection: false,
         },
       },
       {
         sendArgs: [error, { isError: true, endConnection: true }],
         expectedSendResponseArg: {
-          error,
-          data: null,
           connectionId,
-          type: "general",
+          response: {
+            payload: error,
+            metadata: { ...metadata, isError: true },
+          },
           endConnection: true,
         },
       },

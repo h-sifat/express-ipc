@@ -4,22 +4,25 @@ import type {
   RouteHandlersRegister,
   MiddlewareRestParameter,
 } from "./interface";
+
 import { EPP } from "../util";
 import { assert } from "handy-types";
 import { match } from "path-to-regexp";
 
+type IsErrorMiddleware = (middleware: Function) => boolean;
+
 export interface RouteHandlersRegistrarConstructor_Argument {
-  ERROR_HANDLER_FLAG: symbol;
   register: RouteHandlersRegister;
+  isErrorMiddleware: IsErrorMiddleware;
 }
 
 export class RouteHandlerRegistrar {
   readonly #register: RouteHandlersRegister;
-  readonly #ERROR_HANDLER_FLAG: symbol;
+  readonly #isErrorMiddleware: IsErrorMiddleware;
 
   constructor(arg: RouteHandlersRegistrarConstructor_Argument) {
     this.#register = arg.register;
-    this.#ERROR_HANDLER_FLAG = arg.ERROR_HANDLER_FLAG;
+    this.#isErrorMiddleware = arg.isErrorMiddleware;
   }
 
   get(path: string, ...handlers: MiddlewareRestParameter) {
@@ -76,15 +79,15 @@ export class RouteHandlerRegistrar {
     registerRouteHandlers({
       handlers,
       route: this.#register[group][path],
-      ERROR_HANDLER_FLAG: this.#ERROR_HANDLER_FLAG,
+      isErrorMiddleware: this.#isErrorMiddleware,
     });
   }
 }
 
 export function registerRouteHandlers(arg: {
   route: RouteObject;
-  ERROR_HANDLER_FLAG: symbol;
   handlers: MiddlewareRestParameter;
+  isErrorMiddleware: IsErrorMiddleware;
 }) {
   const flattenHandlers = arg.handlers.flat();
   assert.cache<MiddlewareRestParameter>("function[]", flattenHandlers, {
@@ -95,6 +98,6 @@ export function registerRouteHandlers(arg: {
   const { route } = arg;
 
   for (const handler of flattenHandlers)
-    if (arg.ERROR_HANDLER_FLAG in handler) route.errorHandlers.push(handler);
+    if (arg.isErrorMiddleware(handler)) route.errorHandlers.push(handler);
     else route.generalHandlers.push(handler);
 }

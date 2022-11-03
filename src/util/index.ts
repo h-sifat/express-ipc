@@ -1,7 +1,10 @@
+import os from "os";
+import path from "path";
 import { assert } from "handy-types";
 
-import type { PrimaryGeneralRequest } from "../interface";
-import type { RequestInterface } from "../express/interface";
+import type { GeneralRequestPayload } from "../interface";
+import type { ExpressRequest } from "../express/interface";
+import type { MakeSocketPath_Argument } from "../ipc-server/ipc-server";
 
 export class EPP extends Error {
   code: string;
@@ -84,11 +87,11 @@ export function* makeGenerator<Type>(array: Type[]): Generator<Type> {
 
 export function normalizeRawRequest(arg: {
   excludeProperties?: string[];
-  rawRequest: PrimaryGeneralRequest;
-}): RequestInterface {
+  rawRequest: GeneralRequestPayload;
+}): ExpressRequest {
   const { rawRequest, excludeProperties = [] } = arg;
 
-  const request: Partial<RequestInterface> = {
+  const request: Partial<ExpressRequest> = {
     path: "/",
     params: {},
   };
@@ -102,5 +105,20 @@ export function normalizeRawRequest(arg: {
         value: rawRequest[property],
       });
 
-  return request as RequestInterface;
+  return request as ExpressRequest;
+}
+
+export function makeSocketPath(arg: MakeSocketPath_Argument): string {
+  const { id, namespace, socketRoot } = arg;
+
+  const socketPath = path.join(socketRoot, `${namespace}_${id}`);
+
+  return os.type() === "Windows_NT"
+    ? path.join("\\\\?\\pipe", socketPath)
+    : socketPath;
+}
+
+export function isErrorMiddleware(middleware: Function): boolean {
+  // (resAndReq, error) => any
+  return middleware.length === 2;
 }

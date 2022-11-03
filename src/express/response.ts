@@ -1,18 +1,23 @@
 import { EPP } from "../util";
+
+import type { GeneralRequest } from "../interface";
 import type { ResponseInterface } from "./interface";
-import type { IPC_Server_Interface } from "../ipc-server/ipc-server";
+import type { IPC_ServerInterface } from "../ipc-server/interface";
 
 export class Response implements ResponseInterface {
   #isSent = false;
-  #connectionId: number;
-  #sendResponse: IPC_Server_Interface["sendResponse"];
+  readonly #connectionId: number;
+  readonly #metadata: GeneralRequest["metadata"];
+  readonly #sendResponse: IPC_ServerInterface["sendResponse"];
 
   constructor(arg: {
-    sendResponse: IPC_Server_Interface["sendResponse"];
     connectionId: number;
+    metadata: GeneralRequest["metadata"];
+    sendResponse: IPC_ServerInterface["sendResponse"];
   }) {
-    this.#sendResponse = arg.sendResponse;
+    this.#metadata = arg.metadata;
     this.#connectionId = arg.connectionId;
+    this.#sendResponse = arg.sendResponse;
   }
 
   send(
@@ -25,11 +30,11 @@ export class Response implements ResponseInterface {
 
     this.#sendResponse({
       endConnection,
-      type: "general",
+      response: {
+        payload: dataOrError,
+        metadata: { ...this.#metadata, isError },
+      },
       connectionId: this.#connectionId,
-      ...(isError
-        ? { error: dataOrError, data: null }
-        : { data: dataOrError, error: null }),
     });
 
     this.#isSent = true;
