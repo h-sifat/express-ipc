@@ -1,6 +1,6 @@
 import { EPP } from "../util";
 
-import type { GeneralRequest } from "../interface";
+import type { GeneralRequest, PlainObject } from "../interface";
 import type { ResponseInterface } from "./interface";
 import type { IPC_ServerInterface } from "../ipc-server/interface";
 
@@ -9,6 +9,7 @@ export class Response implements ResponseInterface {
   readonly #connectionId: number;
   readonly #metadata: GeneralRequest["metadata"];
   readonly #sendResponse: IPC_ServerInterface["sendResponse"];
+  readonly #headers: PlainObject<any> = {};
 
   constructor(arg: {
     connectionId: number;
@@ -21,7 +22,7 @@ export class Response implements ResponseInterface {
   }
 
   send(
-    dataOrError: object,
+    body: object | null = null,
     options?: { type?: "json"; endConnection?: false; isError?: boolean }
   ) {
     this.#assertResponseNotSent();
@@ -31,7 +32,7 @@ export class Response implements ResponseInterface {
     this.#sendResponse({
       endConnection,
       response: {
-        payload: dataOrError,
+        payload: { headers: this.#headers, body: body },
         metadata: { ...this.#metadata, isError },
       },
       connectionId: this.#connectionId,
@@ -50,5 +51,9 @@ export class Response implements ResponseInterface {
 
   get isSent() {
     return this.#isSent;
+  }
+
+  get headers() {
+    return this.#headers;
   }
 }

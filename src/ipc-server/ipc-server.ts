@@ -207,7 +207,10 @@ export function makeIPC_ServerClass(
         this.sendResponse({
           connectionId,
           response: {
-            payload: { message: ex.message, code: ex.code || "" },
+            payload: {
+              headers: {},
+              body: { message: ex.message, code: ex.code || "" },
+            },
             metadata: { id: "unknown", category: "general", isError: true },
           },
         });
@@ -221,7 +224,10 @@ export function makeIPC_ServerClass(
           connectionId,
           response: {
             metadata: { ...request.metadata, isError: true },
-            payload: { message: ex.message, code: ex.code || "" },
+            payload: {
+              headers: {},
+              body: { message: ex.message, code: ex.code || "" },
+            },
           },
         });
         return;
@@ -249,7 +255,7 @@ export function makeIPC_ServerClass(
       this.sendResponse({
         connectionId,
         response: {
-          payload: { message },
+          payload: { headers: {}, body: { message } },
           metadata: { ...request.metadata, isError: false },
         },
       });
@@ -274,7 +280,7 @@ export function makeIPC_ServerClass(
       this.sendResponse({
         connectionId,
         response: {
-          payload: { message },
+          payload: { body: { message }, headers: {} },
           metadata: { ...request.metadata, isError: false },
         },
       });

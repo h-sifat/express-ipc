@@ -32,7 +32,7 @@ describe("send", () => {
         expectedSendResponseArg: {
           connectionId,
           response: {
-            payload: data,
+            payload: { body: data, headers: {} },
             metadata: { ...metadata, isError: false },
           },
           endConnection: false,
@@ -43,7 +43,7 @@ describe("send", () => {
         expectedSendResponseArg: {
           connectionId,
           response: {
-            payload: error,
+            payload: { body: error, headers: {} },
             metadata: { ...metadata, isError: true },
           },
           endConnection: true,
@@ -75,4 +75,21 @@ describe("send", () => {
       }
     });
   }
+
+  it(`sets headers on the request`, () => {
+    const prop = "Content-Type";
+    const value = "application/json";
+
+    response.headers[prop] = value;
+    response.send(data);
+
+    expect(sendResponse).toHaveBeenCalledWith({
+      connectionId,
+      response: {
+        payload: { body: data, headers: { [prop]: value } },
+        metadata: { ...metadata, isError: false },
+      },
+      endConnection: false,
+    });
+  });
 });

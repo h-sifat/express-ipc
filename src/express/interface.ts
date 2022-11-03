@@ -2,8 +2,9 @@ import type { GeneralRequestPayload, PlainObject } from "../interface";
 
 export interface ResponseInterface {
   isSent: boolean;
+  headers: PlainObject<any>;
   send(
-    dataOrError: object,
+    body?: object | null,
     options?: { type?: "json"; endConnection?: false; isError?: boolean }
   ): void;
 }

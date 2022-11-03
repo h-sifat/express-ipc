@@ -1,8 +1,4 @@
-import type {
-  GeneralRequest,
-  RequestResponse,
-  BroadcastResponse,
-} from "../interface";
+import type { GeneralRequest, SocketResponse } from "../interface";
 
 export type Listen_Argument = {
   callback?: () => void;
@@ -16,7 +12,7 @@ export interface ConnectionId {
 
 export type SendResponse_Argument = {
   endConnection?: boolean;
-} & ConnectionId & { response: RequestResponse | BroadcastResponse };
+} & ConnectionId & { response: SocketResponse };
 
 export type RequestHandler_Argument = ConnectionId & {
   request: GeneralRequest;
