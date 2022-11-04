@@ -299,11 +299,13 @@ export function makeIPC_ServerClass(
       this.#server.on(event, listener);
     };
 
-    close = (callback: (err?: Error | null) => void = () => {}) => {
-      this.#server.close(callback);
+    close = (callback: () => void = () => {}) => {
+      this.#server.close();
 
       if (this.#socketPath) deleteSocketFile(this.#socketPath);
       this.#socketPath = undefined;
+
+      callback();
     };
 
     broadcast = (arg: { channel: string; data: object }) => {

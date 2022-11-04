@@ -28,7 +28,7 @@ export interface IPC_ServerInterface {
   createChannels(channels: string[]): void;
   deleteChannels(channels: string[]): void;
   sendResponse(arg: SendResponse_Argument): void;
-  close(callback: (err?: Error | null) => void): void;
+  close(callback?: (err?: Error | null) => void): void;
   broadcast(arg: { channel: string; data: object }): void;
   on(event: string, listener: (...args: any[]) => void): void;
 }
