@@ -1,20 +1,19 @@
-import fs from "fs";
-import os from "os";
 import { createServer } from "net";
 
-import { makeSocketPath } from "../util";
+import {
+  validateDelimiter,
+  validateRequestPayload,
+  validateRequestMetadata,
+} from "./validator";
 import { makeIPC_ServerClass } from "./ipc-server";
-import { validateRequestMetadata, validateRequestPayload } from "./validator";
+import { deleteSocketFile, makeSocketPath, splitDataIntoChunks } from "../util";
 
 export const IPC_Server = makeIPC_ServerClass({
   createServer,
+  makeSocketPath,
   deleteSocketFile,
+  validateDelimiter,
+  splitDataIntoChunks,
   validateRequestPayload,
   validateRequestMetadata,
-  getSocketPath: makeSocketPath,
 });
-
-function deleteSocketFile(socketPath: string) {
-  // in Windows, when a server closes, the socket is automatically deleted
-  if (os.type() !== "Windows_NT") fs.rmSync(socketPath, { force: true });
-}

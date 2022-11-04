@@ -8,6 +8,7 @@ import { assert } from "handy-types";
 import { EPP, validate } from "../util";
 import type { ValidatorSchema } from "../util";
 import { VALID_REQUEST_METHODS, VALID_REQUEST_CATEGORIES } from "./ipc-server";
+import { Listen_Argument } from "./interface";
 
 const requestMetaDataSchema: Readonly<
   ValidatorSchema<SocketRequest["metadata"]>
@@ -80,4 +81,26 @@ export function validateRequestPayload(
           message: `Invalid request method: ${payload.method}`,
         });
   }
+}
+
+export function validateDelimiter(delimiter: any) {
+  assert<string>("non_empty_string", delimiter, {
+    name: "delimiter",
+    code: "INVALID_DELIMITER",
+  });
+
+  if (delimiter.length !== 1)
+    throw new EPP({
+      code: "INVALID_DELIMITER:NOT_CHAR",
+      message: `The "delimiter" must be a single character.`,
+    });
+}
+
+export function validateSocketPath(
+  path: unknown
+): asserts path is Listen_Argument["path"] {
+  assert.cache("non_empty_string | plain_object", path, {
+    name: "path",
+    code: "INVALID_PATH",
+  });
 }

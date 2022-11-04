@@ -15,6 +15,7 @@ import type {
 import { EPP } from "../util";
 import { assert } from "handy-types";
 import type { Server, Socket } from "net";
+import { SplitDataIntoChunks } from "../util/interface";
 
 export const VALID_REQUEST_CATEGORIES = Object.freeze([
   "general",
@@ -47,9 +48,8 @@ interface HandleIncomingData_Argument {
 }
 
 export interface MakeSocketPath_Argument {
-  id: string;
-  namespace: string;
   socketRoot: string;
+  path: Listen_Argument["path"];
 }
 
 export interface MakeIPC_ServerClass_Argument {
@@ -62,15 +62,24 @@ export interface MakeIPC_ServerClass_Argument {
     category: SocketRequest["metadata"]["category"]
   ): asserts payload is SocketRequest["payload"];
 
+  validateDelimiter(delimiter: any): void;
+
+  splitDataIntoChunks: SplitDataIntoChunks;
   deleteSocketFile(socketPath: string): void;
-  getSocketPath(arg: MakeSocketPath_Argument): string;
+  makeSocketPath(arg: MakeSocketPath_Argument): string;
   createServer(callback: (socket: Socket) => void): Server;
 }
 
 export function makeIPC_ServerClass(
   builderArg: MakeIPC_ServerClass_Argument
 ): IPC_ServerClass {
-  const { createServer, getSocketPath, deleteSocketFile } = builderArg;
+  const {
+    createServer,
+    makeSocketPath,
+    deleteSocketFile,
+    validateDelimiter,
+    splitDataIntoChunks,
+  } = builderArg;
 
   const validateRequestPayload: MakeIPC_ServerClass_Argument["validateRequestPayload"] =
     builderArg.validateRequestPayload;
@@ -98,16 +107,7 @@ export function makeIPC_ServerClass(
     constructor(arg: IPC_ServerConstructor_Argument) {
       this.#DELIMITER = arg.delimiter;
 
-      assert<string>("non_empty_string", this.#DELIMITER, {
-        name: "delimiter",
-        code: "INVALID_DELIMITER",
-      });
-
-      if (this.#DELIMITER.length !== 1)
-        throw new EPP({
-          code: "INVALID_DELIMITER:NOT_CHAR",
-          message: `The "delimiter" must be a single character.`,
-        });
+      validateDelimiter(this.#DELIMITER);
 
       assert<IPC_ServerConstructor_Argument["requestHandler"]>(
         "function",
@@ -168,15 +168,12 @@ export function makeIPC_ServerClass(
 
       connection.__dataBuffer += receivedData;
 
-      const requests = connection.__dataBuffer.split(this.#DELIMITER);
+      const { chunks: requests, residue } = splitDataIntoChunks({
+        delimiter: this.#DELIMITER,
+        data: connection.__dataBuffer,
+      });
 
-      // meaning that the current request's incoming data hasn't terminated yet.
-      if (requests.length <= 1) return;
-
-      // the last element holds the most recent request's
-      // unterminated data or an empty string (""). so assign it back to
-      // the __dataBuffer.
-      connection.__dataBuffer = requests.pop()!;
+      connection.__dataBuffer = residue;
 
       for (const rawRequestData of requests)
         this.#validateAndRouteRequest({ connectionId, data: rawRequestData });
@@ -287,16 +284,10 @@ export function makeIPC_ServerClass(
     }
 
     listen = (arg: Listen_Argument) => {
-      const socketPath = (() => {
-        const { path } = arg;
-        return typeof path === "string"
-          ? path
-          : getSocketPath({
-              id: path.id,
-              namespace: path.namespace,
-              socketRoot: this.#socketRoot,
-            });
-      })();
+      const socketPath = makeSocketPath({
+        path: arg.path,
+        socketRoot: this.#socketRoot,
+      });
 
       if (arg.deleteSocketBeforeListening) deleteSocketFile(socketPath);
 

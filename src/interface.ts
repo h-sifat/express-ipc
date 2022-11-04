@@ -57,7 +57,7 @@ export interface BroadcastResponse {
 
 export type GeneralRequestResponse = {
   payload: GeneralResponsePayload;
-  metadata: ResponseMetaData<any>;
+  metadata: ResponseMetaData<"general" | "subscribe" | "unsubscribe">;
 };
 
 export type SocketResponse = BroadcastResponse | GeneralRequestResponse;

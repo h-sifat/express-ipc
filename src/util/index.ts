@@ -1,10 +1,14 @@
 import os from "os";
-import path from "path";
+import fs from "fs";
 import { assert } from "handy-types";
+import { join as joinPath } from "path";
+
+import { validateSocketPath } from "../ipc-server/validator";
 
 import type { GeneralRequestPayload } from "../interface";
 import type { ExpressRequest } from "../express/interface";
 import type { MakeSocketPath_Argument } from "../ipc-server/ipc-server";
+import { SplitDataIntoChunks } from "./interface";
 
 export class EPP extends Error {
   code: string;
@@ -109,16 +113,41 @@ export function normalizeRawRequest(arg: {
 }
 
 export function makeSocketPath(arg: MakeSocketPath_Argument): string {
-  const { id, namespace, socketRoot } = arg;
+  const { path, socketRoot } = arg;
 
-  const socketPath = path.join(socketRoot, `${namespace}_${id}`);
+  validateSocketPath(path);
+
+  const socketPath =
+    typeof path === "string"
+      ? path
+      : joinPath(socketRoot, `${path.namespace}_${path.id}`);
 
   return os.type() === "Windows_NT"
-    ? path.join("\\\\?\\pipe", socketPath)
+    ? joinPath("\\\\?\\pipe", socketPath)
     : socketPath;
 }
 
 export function isErrorMiddleware(middleware: Function): boolean {
   // (resAndReq, error) => any
   return middleware.length === 2;
+}
+
+export const splitDataIntoChunks: SplitDataIntoChunks = function (arg) {
+  const { data, delimiter } = arg;
+
+  const chunks = data.split(delimiter);
+
+  // meaning that the current-chunk hasn't terminated yet.
+  if (chunks.length <= 1) return { residue: data, chunks: [] };
+
+  // the last element holds the most recent chunk's
+  // unterminated data or an empty string ("").
+  const residue = chunks.pop()!;
+
+  return { chunks, residue };
+};
+
+export function deleteSocketFile(socketPath: string) {
+  // in Windows, when a server closes, the socket is automatically deleted
+  if (os.type() !== "Windows_NT") fs.rmSync(socketPath, { force: true });
 }
