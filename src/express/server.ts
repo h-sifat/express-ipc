@@ -39,6 +39,8 @@ export class ExpressIPCServer extends RouteHandlerRegistrar {
   readonly close: IPC_ServerInterface["close"];
   readonly listen: IPC_ServerInterface["listen"];
   readonly broadcast: IPC_ServerInterface["broadcast"];
+  readonly createChannels: IPC_ServerInterface["createChannels"];
+  readonly deleteChannels: IPC_ServerInterface["deleteChannels"];
 
   constructor(arg: ExpressConstructor_Argument = {}) {
     const register = Object.freeze({
@@ -63,6 +65,8 @@ export class ExpressIPCServer extends RouteHandlerRegistrar {
     this.close = this.#server.close;
     this.listen = this.#server.listen;
     this.broadcast = this.#server.broadcast;
+    this.createChannels = this.#server.createChannels;
+    this.deleteChannels = this.#server.deleteChannels;
   }
 
   #requestHandler = (arg: RequestHandler_Argument) => {

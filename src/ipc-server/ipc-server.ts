@@ -151,12 +151,26 @@ export function makeIPC_ServerClass(
       });
     }
 
-    createChannels(channels: string[]) {
+    createChannels = (...channelsRestArg: (string | string[])[]) => {
+      const channels = this.#flattenAndValidateChannelArgs(channelsRestArg);
       for (const channel of channels) this.#channels.add(channel);
-    }
+    };
 
-    deleteChannels(channels: string[]) {
+    deleteChannels = (...channelsRestArg: (string | string[])[]) => {
+      const channels = this.#flattenAndValidateChannelArgs(channelsRestArg);
       for (const channel of channels) this.#channels.delete(channel);
+    };
+
+    #flattenAndValidateChannelArgs(
+      channelsRestArg: (string | string[])[]
+    ): string[] {
+      const channels = channelsRestArg.flat();
+      assert.cache<string[]>("non_empty_string[]", channels, {
+        code: "INVALID_CHANNELS",
+        message: `channel name must of type non-empty string.`,
+      });
+
+      return channels;
     }
 
     #handleIncomingData({

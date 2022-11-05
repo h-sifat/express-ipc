@@ -25,11 +25,11 @@ export interface IPC_ServerConstructor_Argument {
 
 export interface IPC_ServerInterface {
   listen(arg: Listen_Argument): void;
-  createChannels(channels: string[]): void;
-  deleteChannels(channels: string[]): void;
   sendResponse(arg: SendResponse_Argument): void;
   close(callback?: (err?: Error | null) => void): void;
   broadcast(arg: { channel: string; data: object }): void;
+  createChannels(...channels: (string | string[])[]): void;
+  deleteChannels(...channels: (string | string[])[]): void;
   on(event: string, listener: (...args: any[]) => void): void;
 }
 
