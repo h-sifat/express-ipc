@@ -4,6 +4,8 @@ import type {
   SocketResponse,
   GeneralRequestPayload,
   GeneralResponsePayload,
+  SubscribeChannelsRequest,
+  UnsubscribeChannelsRequest,
 } from "../interface";
 import type { Listen_Argument } from "../ipc-server/interface";
 
@@ -11,7 +13,12 @@ import { tmpdir } from "os";
 import EventEmitter from "events";
 import { createConnection, Socket } from "net";
 import { validateDelimiter } from "../ipc-server/validator";
-import { EPP, makeSocketPath, splitDataIntoChunks } from "../util";
+import {
+  EPP,
+  flattenAndValidateChannelArgs,
+  makeSocketPath,
+  splitDataIntoChunks,
+} from "../util";
 
 type OptionalArgs = Partial<
   Pick<GeneralRequestPayload, "query" | "headers" | "body">
@@ -35,8 +42,12 @@ export interface ExpressIPCClientInterface {
   ): Promise<GeneralResponsePayload>;
   delete(url: string, otherArg?: OptionalArgs): Promise<GeneralResponsePayload>;
 
-  subscribe(channels: string[]): Promise<GeneralResponsePayload>;
-  unsubscribe(channels: string[]): Promise<GeneralResponsePayload>;
+  subscribe(
+    ...channels: (string | string[])[]
+  ): Promise<GeneralResponsePayload>;
+  unsubscribe(
+    ...channels: (string | string[])[]
+  ): Promise<GeneralResponsePayload>;
 
   on(
     event: "broadcast",
@@ -69,7 +80,7 @@ Object.freeze(SOCKET_ENDED_ERROR);
 
 export class ExpressIPCClient
   extends EventEmitter
-  implements Partial<ExpressIPCClientInterface>
+  implements ExpressIPCClientInterface
 {
   readonly #path: string;
   readonly #delimiter: string;
@@ -223,6 +234,35 @@ export class ExpressIPCClient
 
     if (response.metadata.isError) query.promise.reject(response.payload);
     else query.promise.resolve(response.payload);
+  }
+
+  subscribe(
+    ...channelsRestArg: (string | string[])[]
+  ): Promise<GeneralResponsePayload> {
+    const channels = flattenAndValidateChannelArgs(channelsRestArg);
+
+    const request: SubscribeChannelsRequest = {
+      payload: Object.freeze({ channels }),
+      metadata: Object.freeze({ id: this.#getNewId(), category: "subscribe" }),
+    };
+
+    return this.#enqueueRequest(request);
+  }
+
+  unsubscribe(
+    ...channelsRestArg: (string | string[])[]
+  ): Promise<GeneralResponsePayload> {
+    const channels = flattenAndValidateChannelArgs(channelsRestArg);
+
+    const request: UnsubscribeChannelsRequest = {
+      payload: Object.freeze({ channels }),
+      metadata: Object.freeze({
+        id: this.#getNewId(),
+        category: "unsubscribe",
+      }),
+    };
+
+    return this.#enqueueRequest(request);
   }
 
   async request(
