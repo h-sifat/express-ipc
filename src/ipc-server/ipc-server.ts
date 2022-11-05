@@ -5,6 +5,7 @@ import type {
   IPC_ServerInterface,
   SendResponse_Argument,
   IPC_ServerConstructor_Argument,
+  Broadcast_Argument,
 } from "./interface";
 import type {
   SocketRequest,
@@ -323,8 +324,8 @@ export function makeIPC_ServerClass(
       callback();
     };
 
-    broadcast = (arg: { channel: string; data: object }) => {
-      const { channel, data } = arg;
+    broadcast = (arg: Broadcast_Argument) => {
+      const { channel, data, blacklist = [] } = arg;
 
       if (!this.#channels.has(channel))
         throw new EPP({
@@ -337,8 +338,12 @@ export function makeIPC_ServerClass(
         code: "INVALID_BROADCAST_DATA",
       });
 
-      for (const connection of Object.values(this.#connections) as Connection[])
-        if (connection.channels.has(channel))
+      for (const connection of Object.values(this.#connections)) {
+        const shouldSend =
+          connection.channels.has(channel) &&
+          !blacklist.includes(connection.id);
+
+        if (shouldSend)
           this.sendResponse({
             connectionId: connection.id,
             response: {
@@ -346,6 +351,7 @@ export function makeIPC_ServerClass(
               metadata: { channel, category: "broadcast" },
             },
           });
+      }
     };
 
     sendResponse = (arg: SendResponse_Argument) => {

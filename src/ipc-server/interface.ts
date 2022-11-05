@@ -23,11 +23,17 @@ export interface IPC_ServerConstructor_Argument {
   requestHandler(arg: RequestHandler_Argument): void;
 }
 
+export interface Broadcast_Argument {
+  data: object;
+  channel: string;
+  blacklist?: number[];
+}
+
 export interface IPC_ServerInterface {
   listen(arg: Listen_Argument): void;
   sendResponse(arg: SendResponse_Argument): void;
   close(callback?: (err?: Error | null) => void): void;
-  broadcast(arg: { channel: string; data: object }): void;
+  broadcast(arg: Broadcast_Argument): void;
   createChannels(...channels: (string | string[])[]): void;
   deleteChannels(...channels: (string | string[])[]): void;
   on(event: string, listener: (...args: any[]) => void): void;

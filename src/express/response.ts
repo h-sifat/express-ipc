@@ -56,4 +56,8 @@ export class Response implements ResponseInterface {
   get headers() {
     return this.#headers;
   }
+
+  get connectionId() {
+    return this.#connectionId;
+  }
 }

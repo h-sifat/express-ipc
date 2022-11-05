@@ -22,6 +22,12 @@ describe("getter isSent", () => {
   });
 });
 
+describe("getter connectionId", () => {
+  it(`returns the connection id`, () => {
+    expect(response.connectionId).toBe(connectionId);
+  });
+});
+
 describe("send", () => {
   const data = Object.freeze({ value: 1 });
   const error = Object.freeze({ message: "invalid id", code: "INVALID_ID" });
