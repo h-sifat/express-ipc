@@ -133,7 +133,7 @@ export class ExpressIPCClient
     socket.removeAllListeners("error");
   }
 
-  #socketErrorHandler(error: any) {
+  #socketErrorHandler = (error: any) => {
     this.#socketEnded = true;
     this.#isSocketWritable = false;
     this.#removeSocketEventListeners(this.#socket);
@@ -143,7 +143,7 @@ export class ExpressIPCClient
     } catch {}
 
     this.#rejectAllRequests(error);
-  }
+  };
 
   #rejectAllRequests(error: any) {
     for (const id of this.#queriesWaitingForResponse.keys()) {
