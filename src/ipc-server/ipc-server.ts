@@ -8,6 +8,7 @@ import type {
 } from "./interface";
 import type {
   SocketRequest,
+  SocketResponse,
   SubscribeChannelsRequest,
   UnsubscribeChannelsRequest,
 } from "../interface";
@@ -351,36 +352,46 @@ export function makeIPC_ServerClass(
       const connection = this.#connections[arg.connectionId];
       if (!connection) return;
 
-      const { response } = arg;
-      if (!VALID_RESPONSE_CATEGORIES.includes(response.metadata.category))
-        throw new EPP({
-          code: "INVALID_RESPONSE_CATEGORY",
-          message: `Invalid response category: "${response.metadata.category}"`,
-        });
-
-      assert<object>("non_null_object", response.payload, {
-        name: "Response payload",
-        code: "INVALID_RESPONSE_PAYLOAD",
+      __sendResponse({
+        response: arg.response,
+        socket: connection.socket,
+        delimiter: this.#DELIMITER,
+        endConnection: arg.endConnection || false,
       });
-
-      const serializedData = JSON.stringify(response);
-
-      if (serializedData.includes(this.#DELIMITER))
-        throw new EPP({
-          code: "DELIMITER_IN_RESPONSE",
-          message:
-            `The response object must not contain any value or property ` +
-            `that contains the delimiter character.`,
-        });
-
-      try {
-        connection.socket.write(serializedData + this.#DELIMITER, (_error) => {
-          // I don't know what to do with the error.
-          // At this point I'm literally becoming crazy 😫
-
-          if (arg.endConnection) connection.socket.end();
-        });
-      } catch {}
     };
   };
+}
+
+interface __sendResponse_Argument {
+  socket: Socket;
+  delimiter: string;
+  response: SocketResponse;
+  endConnection: boolean;
+}
+
+// I extracted this function out of the class so that I can test it
+export function __sendResponse(arg: __sendResponse_Argument) {
+  const { response, socket, delimiter, endConnection } = arg;
+
+  if (!VALID_RESPONSE_CATEGORIES.includes(response.metadata.category))
+    throw new EPP({
+      code: "INVALID_RESPONSE_CATEGORY",
+      message: `Invalid response category: "${response.metadata.category}"`,
+    });
+
+  assert<object>("object", response.payload, {
+    name: "Response payload",
+    code: "INVALID_RESPONSE_PAYLOAD",
+  });
+
+  const serializedData = JSON.stringify(response) + delimiter;
+
+  try {
+    socket.write(serializedData, (_error) => {
+      // I don't know what to do with the error.
+      // At this point I'm literally becoming crazy 😫
+
+      if (endConnection) socket.end();
+    });
+  } catch {}
 }

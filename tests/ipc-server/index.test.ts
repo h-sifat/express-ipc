@@ -39,3 +39,35 @@ describe("create and delete Channels", () => {
     }
   );
 });
+
+describe("broadcast", () => {
+  {
+    const errorCode = "UNKNOWN_CHANNEL";
+    it(`throws ewc "${errorCode}" if channel is not created`, () => {
+      expect.assertions(1);
+      try {
+        server.broadcast({ channel: "not_created_yet", data: { value: 1 } });
+      } catch (ex) {
+        expect(ex.code).toBe(errorCode);
+      }
+    });
+  }
+
+  {
+    const errorCode = "INVALID_BROADCAST_DATA";
+
+    it(`throws ewc "${errorCode}" if data is not of type non_null_object`, () => {
+      expect.assertions(1);
+
+      const channel = "a";
+      server.createChannels(channel);
+
+      try {
+        // @ts-ignore
+        server.broadcast({ channel, data: null });
+      } catch (ex) {
+        expect(ex.code).toBe(errorCode);
+      }
+    });
+  }
+});
