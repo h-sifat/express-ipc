@@ -8,7 +8,10 @@ import { validateSocketPath } from "../ipc-server/validator";
 import type { GeneralRequestPayload } from "../interface";
 import type { ExpressRequest } from "../express/interface";
 import type { MakeSocketPath_Argument } from "../ipc-server/ipc-server";
-import { SplitDataIntoChunks } from "./interface";
+import type {
+  FlattenAndValidateChannelArgs,
+  SplitDataIntoChunks,
+} from "./interface";
 
 export class EPP extends Error {
   code: string;
@@ -151,3 +154,14 @@ export function deleteSocketFile(socketPath: string) {
   // in Windows, when a server closes, the socket is automatically deleted
   if (os.type() !== "Windows_NT") fs.rmSync(socketPath, { force: true });
 }
+
+export const flattenAndValidateChannelArgs: FlattenAndValidateChannelArgs =
+  function (channelsRestArg) {
+    const channels = channelsRestArg.flat();
+    assert.cache<string[]>("non_empty_string[]", channels, {
+      code: "INVALID_CHANNELS",
+      message: `channel name must of type non-empty string.`,
+    });
+
+    return channels;
+  };

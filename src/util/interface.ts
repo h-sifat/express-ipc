@@ -10,3 +10,7 @@ interface SplitDataIntoChunks_Argument {
 export type SplitDataIntoChunks = (
   arg: SplitDataIntoChunks_Argument
 ) => SplitDataIntoChunks_Output;
+
+export type FlattenAndValidateChannelArgs = (
+  arg: (string | string[])[]
+) => string[];

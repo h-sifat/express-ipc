@@ -5,8 +5,13 @@ import {
   validateRequestPayload,
   validateRequestMetadata,
 } from "./validator";
+import {
+  makeSocketPath,
+  deleteSocketFile,
+  splitDataIntoChunks,
+  flattenAndValidateChannelArgs,
+} from "../util";
 import { makeIPC_ServerClass } from "./ipc-server";
-import { deleteSocketFile, makeSocketPath, splitDataIntoChunks } from "../util";
 
 export const IPC_Server = makeIPC_ServerClass({
   createServer,
@@ -16,4 +21,5 @@ export const IPC_Server = makeIPC_ServerClass({
   splitDataIntoChunks,
   validateRequestPayload,
   validateRequestMetadata,
+  flattenAndValidateChannelArgs,
 });

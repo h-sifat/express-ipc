@@ -2,10 +2,10 @@ import type {
   ConnectionId,
   IPC_ServerClass,
   Listen_Argument,
+  Broadcast_Argument,
   IPC_ServerInterface,
   SendResponse_Argument,
   IPC_ServerConstructor_Argument,
-  Broadcast_Argument,
 } from "./interface";
 import type {
   SocketRequest,
@@ -17,7 +17,10 @@ import type {
 import { EPP } from "../util";
 import { assert } from "handy-types";
 import type { Server, Socket } from "net";
-import { SplitDataIntoChunks } from "../util/interface";
+import {
+  FlattenAndValidateChannelArgs,
+  SplitDataIntoChunks,
+} from "../util/interface";
 
 export const VALID_REQUEST_CATEGORIES = Object.freeze([
   "general",
@@ -70,6 +73,8 @@ export interface MakeIPC_ServerClass_Argument {
   deleteSocketFile(socketPath: string): void;
   makeSocketPath(arg: MakeSocketPath_Argument): string;
   createServer(callback: (socket: Socket) => void): Server;
+
+  flattenAndValidateChannelArgs: FlattenAndValidateChannelArgs;
 }
 
 export function makeIPC_ServerClass(
@@ -81,6 +86,7 @@ export function makeIPC_ServerClass(
     deleteSocketFile,
     validateDelimiter,
     splitDataIntoChunks,
+    flattenAndValidateChannelArgs,
   } = builderArg;
 
   const validateRequestPayload: MakeIPC_ServerClass_Argument["validateRequestPayload"] =
@@ -154,26 +160,14 @@ export function makeIPC_ServerClass(
     }
 
     createChannels = (...channelsRestArg: (string | string[])[]) => {
-      const channels = this.#flattenAndValidateChannelArgs(channelsRestArg);
+      const channels = flattenAndValidateChannelArgs(channelsRestArg);
       for (const channel of channels) this.#channels.add(channel);
     };
 
     deleteChannels = (...channelsRestArg: (string | string[])[]) => {
-      const channels = this.#flattenAndValidateChannelArgs(channelsRestArg);
+      const channels = flattenAndValidateChannelArgs(channelsRestArg);
       for (const channel of channels) this.#channels.delete(channel);
     };
-
-    #flattenAndValidateChannelArgs(
-      channelsRestArg: (string | string[])[]
-    ): string[] {
-      const channels = channelsRestArg.flat();
-      assert.cache<string[]>("non_empty_string[]", channels, {
-        code: "INVALID_CHANNELS",
-        message: `channel name must of type non-empty string.`,
-      });
-
-      return channels;
-    }
 
     #handleIncomingData({
       connectionId,
