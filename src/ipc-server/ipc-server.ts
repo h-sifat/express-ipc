@@ -318,7 +318,7 @@ export function makeIPC_ServerClass(
       callback();
     };
 
-    broadcast = (arg: Broadcast_Argument) => {
+    broadcast = async (arg: Broadcast_Argument) => {
       const { channel, data, blacklist = [] } = arg;
 
       if (!this.#channels.has(channel))
@@ -338,25 +338,33 @@ export function makeIPC_ServerClass(
           !blacklist.includes(connection.id);
 
         if (shouldSend)
-          this.sendResponse({
-            connectionId: connection.id,
-            response: {
-              payload: data,
-              metadata: { channel, category: "broadcast" },
-            },
-          });
+          try {
+            await this.sendResponse({
+              connectionId: connection.id,
+              response: {
+                payload: data,
+                metadata: { channel, category: "broadcast" },
+              },
+            });
+          } catch (ex) {}
       }
     };
 
-    sendResponse = (arg: SendResponse_Argument) => {
+    sendResponse = async (arg: SendResponse_Argument): Promise<void> => {
       const connection = this.#connections[arg.connectionId];
       if (!connection) return;
 
-      __sendResponse({
-        response: arg.response,
-        socket: connection.socket,
-        delimiter: this.#DELIMITER,
-        endConnection: arg.endConnection || false,
+      return new Promise((resolve, reject) => {
+        __sendResponse({
+          response: arg.response,
+          socket: connection.socket,
+          delimiter: this.#DELIMITER,
+          endConnection: arg.endConnection || false,
+          callback(error) {
+            if (error) reject(error);
+            else resolve();
+          },
+        });
       });
     };
   };
@@ -365,13 +373,14 @@ export function makeIPC_ServerClass(
 interface __sendResponse_Argument {
   socket: Socket;
   delimiter: string;
-  response: SocketResponse;
   endConnection: boolean;
+  response: SocketResponse;
+  callback: (error?: any) => void;
 }
 
 // I extracted this function out of the class so that I can test it
 export function __sendResponse(arg: __sendResponse_Argument) {
-  const { response, socket, delimiter, endConnection } = arg;
+  const { response, callback } = arg;
 
   if (!VALID_RESPONSE_CATEGORIES.includes(response.metadata.category))
     throw new EPP({
@@ -384,14 +393,16 @@ export function __sendResponse(arg: __sendResponse_Argument) {
     code: "INVALID_RESPONSE_PAYLOAD",
   });
 
-  const serializedData = JSON.stringify(response) + delimiter;
+  const serializedData = JSON.stringify(response) + arg.delimiter;
 
   try {
-    socket.write(serializedData, (_error) => {
+    const { socket, endConnection } = arg;
+    socket.write(serializedData, (error) => {
       // I don't know what to do with the error.
       // At this point I'm literally becoming crazy 😫
 
-      if (endConnection) socket.end();
+      if (endConnection) socket.end(callback);
+      else callback(error);
     });
   } catch {}
 }

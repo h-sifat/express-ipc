@@ -114,6 +114,8 @@ describe("broadcast", () => {
         done();
       } catch (ex) {
         done(ex);
+      } finally {
+        client.removeAllListeners("broadcast");
       }
     });
 

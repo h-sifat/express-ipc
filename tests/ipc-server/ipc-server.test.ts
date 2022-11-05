@@ -39,50 +39,56 @@ describe("__sendResponse", () => {
   });
 
   it(`writes the data to the socket`, () => {
+    const sendResponseCallback = jest.fn();
     __sendResponse({
       socket,
       delimiter,
       endConnection: false,
       response: validResponse,
+      callback: sendResponseCallback,
     });
 
     expect(socket.write).toHaveBeenCalledTimes(1);
 
-    const [serializedData, callback] = socket.write.mock.calls[0];
+    const [serializedData, socketWriteCallback] = socket.write.mock.calls[0];
 
     expect(serializedData).toEqual(expect.any(String));
     expect(serializedData.endsWith(delimiter)).toBeTruthy();
 
-    expect(callback).toEqual(expect.any(Function));
+    expect(socketWriteCallback).toEqual(expect.any(Function));
 
     // calling the callback
-    callback();
+    socketWriteCallback();
 
     // as endConnection is false
     expect(socket.end).not.toHaveBeenCalled();
+    expect(sendResponseCallback).toHaveBeenCalledTimes(1);
   });
 
   it(`ends the socket after writing data to it if the "endConnection" flag is true`, () => {
+    const sendResponseCallback = jest.fn();
+
     __sendResponse({
       socket,
       delimiter,
       endConnection: true,
       response: validResponse,
+      callback: sendResponseCallback,
     });
 
     expect(socket.write).toHaveBeenCalledTimes(1);
 
-    const [serializedData, callback] = socket.write.mock.calls[0];
+    const [serializedData, socketWriteCallback] = socket.write.mock.calls[0];
 
     expect(serializedData).toEqual(expect.any(String));
     expect(serializedData.endsWith(delimiter)).toBeTruthy();
 
-    expect(callback).toEqual(expect.any(Function));
+    expect(socketWriteCallback).toEqual(expect.any(Function));
 
-    // calling the callback
-    callback();
+    socketWriteCallback();
 
-    // as endConnection is false
-    expect(socket.end).toHaveBeenCalled();
+    // as endConnection is true
+    expect(socket.end).toHaveBeenCalledTimes(1);
+    expect(socket.end).toHaveBeenCalledWith(sendResponseCallback);
   });
 });

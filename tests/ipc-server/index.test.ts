@@ -43,10 +43,13 @@ describe("create and delete Channels", () => {
 describe("broadcast", () => {
   {
     const errorCode = "UNKNOWN_CHANNEL";
-    it(`throws ewc "${errorCode}" if channel is not created`, () => {
+    it(`throws ewc "${errorCode}" if channel is not created`, async () => {
       expect.assertions(1);
       try {
-        server.broadcast({ channel: "not_created_yet", data: { value: 1 } });
+        await server.broadcast({
+          channel: "not_created_yet",
+          data: { value: 1 },
+        });
       } catch (ex) {
         expect(ex.code).toBe(errorCode);
       }
@@ -56,7 +59,7 @@ describe("broadcast", () => {
   {
     const errorCode = "INVALID_BROADCAST_DATA";
 
-    it(`throws ewc "${errorCode}" if data is not of type non_null_object`, () => {
+    it(`throws ewc "${errorCode}" if data is not of type non_null_object`, async () => {
       expect.assertions(1);
 
       const channel = "a";
@@ -64,7 +67,7 @@ describe("broadcast", () => {
 
       try {
         // @ts-ignore
-        server.broadcast({ channel, data: null });
+        await server.broadcast({ channel, data: null });
       } catch (ex) {
         expect(ex.code).toBe(errorCode);
       }

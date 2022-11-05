@@ -31,9 +31,9 @@ export interface Broadcast_Argument {
 
 export interface IPC_ServerInterface {
   listen(arg: Listen_Argument): void;
-  sendResponse(arg: SendResponse_Argument): void;
+  sendResponse(arg: SendResponse_Argument): Promise<void>;
   close(callback?: (err?: Error | null) => void): void;
-  broadcast(arg: Broadcast_Argument): void;
+  broadcast(arg: Broadcast_Argument): Promise<void>;
   createChannels(...channels: (string | string[])[]): void;
   deleteChannels(...channels: (string | string[])[]): void;
   on(event: string, listener: (...args: any[]) => void): void;
