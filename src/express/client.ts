@@ -200,17 +200,24 @@ export class ExpressIPCClient
     });
     this.#dataBuffer = residue;
 
-    for (const response of serializedResponses)
+    for (const responseJSON of serializedResponses) {
+      let response: SocketResponse;
       try {
-        this.#handleResponse(JSON.parse(response));
+        response = JSON.parse(responseJSON);
       } catch (ex) {
-        throw new EPP({
-          code: "FATAL_ERROR:INVALID_RESPONSE",
+        const error = new EPP({
+          code: "INVALID_RESPONSE:NOT_JSON",
           message:
             "Either we got betrayed by the server or we screwed up " +
             "somewhere! Invalid JSON response.",
         });
+
+        this.emit("error", error);
+        continue;
       }
+
+      this.#handleResponse(response);
+    }
   };
 
   #handleResponse(response: SocketResponse) {
@@ -227,11 +234,15 @@ export class ExpressIPCClient
     const query = this.#queriesWaitingForResponse.get(id);
     this.#queriesWaitingForResponse.delete(id);
 
-    if (!query)
-      throw new EPP({
-        code: "FATAL_ERROR:INVALID_RESPONSE",
+    if (!query) {
+      const error = new EPP({
+        code: "INVALID_RESPONSE:UNKNOWN_ID",
         message: `The server returned response with an unknown request id.`,
       });
+      this.emit("error", error);
+
+      return;
+    }
 
     if (response.metadata.isError) query.promise.reject(response.payload);
     else query.promise.resolve(response.payload);

@@ -97,7 +97,7 @@ describe("__sendResponse", () => {
   });
 });
 
-fdescribe("Constructor Arg validation", () => {
+describe("Constructor Arg validation", () => {
   const validArg: IPC_ServerConstructor_Argument = Object.freeze({
     delimiter: "\f",
     requestHandler: () => {},
