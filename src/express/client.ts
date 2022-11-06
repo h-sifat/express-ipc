@@ -20,6 +20,7 @@ import {
   splitDataIntoChunks,
 } from "../util";
 import { defaults } from "./defaults";
+import { assert } from "handy-types";
 
 type OptionalArgs = Partial<
   Pick<GeneralRequestPayload, "query" | "headers" | "body">
@@ -104,6 +105,11 @@ export class ExpressIPCClient
     validateDelimiter(this.#delimiter);
 
     this.#socketRoot = arg.socketRoot || tmpdir();
+    assert<string>("non_empty_string", this.#socketRoot, {
+      name: "socketRoot",
+      code: "INVALID_SOCKET_ROOT",
+    });
+
     this.#path = makeSocketPath({
       path: arg.path as any,
       socketRoot: this.#socketRoot,
