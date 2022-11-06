@@ -1,3 +1,7 @@
+import { tmpdir } from "os";
+import path from "path";
+import { IPC_Server } from "../../src/ipc-server";
+import { IPC_ServerConstructor_Argument } from "../../src/ipc-server/interface";
 import { __sendResponse } from "../../src/ipc-server/ipc-server";
 
 describe("__sendResponse", () => {
@@ -90,5 +94,45 @@ describe("__sendResponse", () => {
     // as endConnection is true
     expect(socket.end).toHaveBeenCalledTimes(1);
     expect(socket.end).toHaveBeenCalledWith(sendResponseCallback);
+  });
+});
+
+fdescribe("Constructor Arg validation", () => {
+  const validArg: IPC_ServerConstructor_Argument = Object.freeze({
+    delimiter: "\f",
+    requestHandler: () => {},
+    socketRoot: path.join(tmpdir(), "socket"),
+  });
+
+  it.each([
+    {
+      arg: { ...validArg, delimiter: "" },
+      case: "delimiter is not a non_empty_string",
+      errorCode: "INVALID_DELIMITER",
+    },
+    {
+      arg: { ...validArg, delimiter: "not_a_char" },
+      case: "delimiter is not a character",
+      errorCode: "INVALID_DELIMITER:NOT_CHAR",
+    },
+    {
+      arg: { ...validArg, requestHandler: ["not_a_function"] },
+      case: "requestHandler is not a function",
+      errorCode: "INVALID_REQUEST_HANDLER",
+    },
+    {
+      arg: { ...validArg, socketRoot: "" },
+      case: "socketRoot is not of type non_empty_string",
+      errorCode: "INVALID_SOCKET_ROOT",
+    },
+  ])(`throws ewc "$errorCode" if $case`, ({ arg, errorCode }) => {
+    expect.assertions(1);
+
+    try {
+      // @ts-ignore
+      new IPC_Server(arg);
+    } catch (ex) {
+      expect(ex.code).toBe(errorCode);
+    }
   });
 });
