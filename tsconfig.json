@@ -5,7 +5,8 @@
 
     "outDir": "./dist",
     "sourceMap": false,
-    "declaration": false,
+    "declaration": true,
+    "declarationDir": "./dist",
     "downlevelIteration": false,
     "esModuleInterop": true,
 
@@ -16,5 +17,5 @@
     "strictPropertyInitialization": true
   },
 
-  "include": ["./src", "./tests"]
+  "include": ["./src"]
 }
