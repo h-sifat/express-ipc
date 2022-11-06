@@ -3,7 +3,11 @@ import { createServer, Server, Socket } from "net";
 import { randomUUID } from "crypto";
 import { makeSocketPath } from "../../src/util";
 import { defaults } from "../../src/express/defaults";
-import { ExpressIPCClient } from "../../src/express/client";
+import {
+  ExpressIPCClient,
+  MANUAL_SOCKET_CLOSE_ERROR,
+  SOCKET_ENDED_ERROR,
+} from "../../src/express/client";
 import { GeneralRequestResponse } from "../../src/interface";
 
 const socketPath = makeSocketPath({
@@ -89,4 +93,65 @@ describe("Handling Invalid Responses", () => {
       clientSocket.write(`${JSON.stringify(response)}${defaults.delimiter}`);
     });
   }
+});
+
+describe("Error Handling", () => {
+  it(`rejects all enqueued requests if an error occurs`, (done) => {
+    expressClient
+      .get("/users")
+      .then(() => {
+        // the request should not resolve as we'll close the client
+        try {
+          expect(1).not.toBe(1);
+          done();
+        } catch (ex) {
+          done(ex);
+        }
+      })
+      .catch((error) => {
+        try {
+          expect(error).toMatchObject({
+            code: MANUAL_SOCKET_CLOSE_ERROR.code,
+            message: MANUAL_SOCKET_CLOSE_ERROR.message,
+          });
+          done();
+        } catch (ex) {
+          done(ex);
+        }
+      });
+
+    // manually destroying the underlying client socket
+    expressClient.close();
+  });
+
+  it(`rejects all enqueued requests if the socket connection is ended by the server`, (done) => {
+    jest.setTimeout(10_000);
+
+    expressClient
+      .get("/users")
+      .then(() => {
+        // the request should not resolve as we'll end the socket
+        try {
+          expect(1).not.toBe(1);
+          done();
+        } catch (ex) {
+          done(ex);
+        }
+      })
+      .catch((error) => {
+        try {
+          expect(error).toMatchObject({
+            code: SOCKET_ENDED_ERROR.code,
+            message: SOCKET_ENDED_ERROR.message,
+          });
+
+          done();
+        } catch (ex) {
+          done(ex);
+        }
+      });
+
+    // manually ending the client socket from the server side
+    clientSocket.end();
+  });
 });

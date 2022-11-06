@@ -67,14 +67,14 @@ type Query = {
   promise: { reject: Function; resolve: Function };
 };
 
-const MANUAL_SOCKET_CLOSE_ERROR = new EPP({
+export const MANUAL_SOCKET_CLOSE_ERROR = new EPP({
   code: "SOCKET_DESTROYED_MANUALLY",
   message: `The underlying client socket has been destroyed manually.`,
 });
 Object.freeze(MANUAL_SOCKET_CLOSE_ERROR);
 
-const SOCKET_ENDED_ERROR = new EPP({
-  code: "socket_ended",
+export const SOCKET_ENDED_ERROR = new EPP({
+  code: "SOCKET_ENDED",
   message: `The socket has been ended by the server.`,
 });
 Object.freeze(SOCKET_ENDED_ERROR);
