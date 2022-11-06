@@ -216,9 +216,13 @@ export function makeIPC_ServerClass(
           response: {
             payload: {
               headers: {},
-              body: { message: ex.message, code: ex.code || "" },
+              body: { message: ex.message, code: ex.code || "INVALID_JSON" },
             },
-            metadata: { id: "unknown", category: "general", isError: true },
+            metadata: {
+              isError: true,
+              category: "general",
+              id: request!?.metadata?.id || "unknown",
+            },
           },
         });
         return;
@@ -233,7 +237,7 @@ export function makeIPC_ServerClass(
             metadata: { ...request.metadata, isError: true },
             payload: {
               headers: {},
-              body: { message: ex.message, code: ex.code || "" },
+              body: { message: ex.message, code: ex.code || "INVALID_PAYLOAD" },
             },
           },
         });
@@ -367,6 +371,9 @@ export function makeIPC_ServerClass(
         });
       });
     };
+    get socketPath() {
+      return this.#socketPath;
+    }
   };
 }
 

@@ -19,6 +19,7 @@ import { IPC_Server } from "../ipc-server";
 import { routeRequestToRouteGroup } from "./request-router";
 import { isErrorMiddleware, normalizeRawRequest } from "../util";
 import { registerRouteHandlers, RouteHandlerRegistrar } from "./registrar";
+import { defaults } from "./defaults";
 
 export type ExpressConstructor_Argument = Omit<
   Partial<IPC_ServerConstructor_Argument>,
@@ -56,9 +57,9 @@ export class ExpressIPCServer extends RouteHandlerRegistrar {
     this.#register = register;
 
     this.#server = new IPC_Server({
-      delimiter: arg.delimiter || "\f",
       requestHandler: this.#requestHandler,
       socketRoot: arg.socketRoot || os.tmpdir(),
+      delimiter: arg.delimiter || defaults.delimiter,
     });
 
     this.on = this.#server.on;
@@ -112,5 +113,9 @@ export class ExpressIPCServer extends RouteHandlerRegistrar {
     }
 
     super.use(firstArg, ...handlers);
+  }
+
+  get socketPath() {
+    return this.#server.socketPath;
   }
 }

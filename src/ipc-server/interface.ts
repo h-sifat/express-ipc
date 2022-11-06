@@ -37,6 +37,8 @@ export interface IPC_ServerInterface {
   createChannels(...channels: (string | string[])[]): void;
   deleteChannels(...channels: (string | string[])[]): void;
   on(event: string, listener: (...args: any[]) => void): void;
+
+  get socketPath(): string | undefined;
 }
 
 export interface IPC_ServerClass {

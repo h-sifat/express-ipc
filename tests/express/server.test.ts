@@ -1,4 +1,7 @@
+import { Socket } from "net";
 import { randomUUID } from "crypto";
+import { createConnection } from "net";
+import { defaults } from "../../src/express/defaults";
 import { ExpressIPCClient } from "../../src/express/client";
 import { ExpressIPCServer } from "../../src/express/server";
 
@@ -124,4 +127,127 @@ describe("broadcast", () => {
       data: broadcastData,
     });
   });
+});
+
+describe("Handling Invalid Requests", () => {
+  let socket: Socket;
+
+  const parseResponseData = (buffer: Buffer) => {
+    const data = buffer.toString().slice(0, -1);
+    return JSON.parse(data);
+  };
+
+  const serializeResponse = (response: any) =>
+    JSON.stringify(response) + defaults.delimiter;
+
+  beforeEach(async () => {
+    await (() =>
+      new Promise((resolve) => {
+        socket = createConnection({ path: server.socketPath! }, () => {
+          resolve();
+        });
+      }) as Promise<void>)();
+  });
+
+  afterEach(() => {
+    socket.destroy();
+  });
+
+  {
+    const errorCode = "INVALID_JSON";
+    it(`returns error response (with code "${errorCode}") if request is not a valid json`, (done) => {
+      socket.write(`invalid json data${defaults.delimiter}`);
+
+      socket.on("data", (buffer: Buffer) => {
+        try {
+          const response = parseResponseData(buffer);
+
+          expect(response).toEqual({
+            metadata: {
+              isError: true,
+              category: "general",
+              id: expect.any(String),
+            },
+            payload: {
+              headers: {},
+              body: { code: errorCode, message: expect.any(String) },
+            },
+          });
+
+          done();
+        } catch (ex) {
+          done(ex);
+        }
+      });
+    });
+  }
+  {
+    it(`returns error response if metadata is invalid`, (done) => {
+      const id = "123";
+      const request = {
+        metadata: { id, category: "invalid_req_category" },
+        payload: {},
+      };
+
+      socket.on("data", (buffer) => {
+        try {
+          const response = parseResponseData(buffer);
+
+          expect(response).toEqual({
+            metadata: {
+              id,
+              isError: true,
+              category: "general",
+            },
+            payload: {
+              headers: {},
+              body: {
+                code: "INVALID_REQUEST_CATEGORY",
+                message: expect.any(String),
+              },
+            },
+          });
+
+          done();
+        } catch (ex) {
+          done(ex);
+        }
+      });
+
+      socket.write(serializeResponse(request));
+    });
+  }
+
+  {
+    it(`returns error response if payload is invalid`, (done) => {
+      const id = "123";
+      const request = {
+        metadata: { id, category: "subscribe" },
+        payload: { channels: [""] },
+      };
+
+      socket.on("data", (buffer: Buffer) => {
+        try {
+          const response = parseResponseData(buffer);
+
+          expect(response).toEqual({
+            metadata: { ...request.metadata, isError: true },
+            payload: {
+              headers: {},
+              body: {
+                message: expect.any(String),
+                code: "INVALID_PROPERTY",
+              },
+            },
+          });
+
+          done();
+        } catch (ex) {
+          done(ex);
+        }
+      });
+
+      socket.write(serializeResponse(request));
+    });
+  }
 });

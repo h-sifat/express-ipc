@@ -19,6 +19,7 @@ import {
   makeSocketPath,
   splitDataIntoChunks,
 } from "../util";
+import { defaults } from "./defaults";
 
 type OptionalArgs = Partial<
   Pick<GeneralRequestPayload, "query" | "headers" | "body">
@@ -99,7 +100,7 @@ export class ExpressIPCClient
   constructor(arg: ExpressIPCClientConstructor_Argument) {
     super();
 
-    this.#delimiter = arg.delimiter || "\f";
+    this.#delimiter = arg.delimiter || defaults.delimiter;
     validateDelimiter(this.#delimiter);
 
     this.#socketRoot = arg.socketRoot || tmpdir();
