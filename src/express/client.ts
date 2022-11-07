@@ -328,7 +328,7 @@ export class ExpressIPCClient
 
   async delete(
     url: string,
-    otherArg?: OptionalArgs
+    otherArg: OptionalArgs = {}
   ): Promise<GeneralResponsePayload> {
     const request = this.#makeRequestObject({
       url,
