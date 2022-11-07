@@ -116,6 +116,7 @@ export function normalizeRawRequest(arg: {
 }
 
 export function makeSocketPath(arg: MakeSocketPath_Argument): string {
+  const WINDOWS_SOCKET_PREFIXES = ["\\\\?\\pipe", "\\\\.\\pipe"];
   const { path, socketRoot } = arg;
 
   validateSocketPath(path);
@@ -125,9 +126,13 @@ export function makeSocketPath(arg: MakeSocketPath_Argument): string {
       ? path
       : joinPath(socketRoot, `${path.namespace}_${path.id}`);
 
-  return os.type() === "Windows_NT"
-    ? joinPath("\\\\?\\pipe", socketPath)
-    : socketPath;
+  if (os.type() === "Windows_NT") {
+    for (const prefix of WINDOWS_SOCKET_PREFIXES)
+      if (socketPath.startsWith(prefix)) return socketPath;
+    return joinPath(WINDOWS_SOCKET_PREFIXES[0], socketPath);
+  }
+
+  return socketPath;
 }
 
 export function isErrorMiddleware(middleware: Function): boolean {
