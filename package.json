@@ -1,6 +1,6 @@
 {
   "name": "express-ipc",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A simple IPC server with express-like request and route handling that also supports broadcasting to multiple channels.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,7 +20,20 @@
     "type": "git",
     "url": "git+https://github.com/h-sifat/express-ipc.git"
   },
-  "keywords": [],
+  "keywords": [
+    "IPC",
+    "TCP",
+    "axios",
+    "pubsub",
+    "express",
+    "node-ipc",
+    "socket.io",
+    "websocket",
+    "express-ipc",
+    "unix domain socket",
+    "windows named pipe",
+    "jayson"
+  ],
   "author": "Muhammad Sifat Hossain",
   "license": "MIT",
   "bugs": {
