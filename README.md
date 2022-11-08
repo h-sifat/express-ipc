@@ -27,6 +27,8 @@ must subscribe to, to receive the data).
 1. [Installing](#installation)
 1. [Importing](#importing)
 1. [API Documentation](#api-documentation)
+1. [Todo](#todo)
+1. [Development](#development)
 
 ## Example Usages
 
@@ -53,7 +55,13 @@ server.get("/users/:id", ({ req, res }) => {
   else res.send({ message: `No user found with id: ${id}` }, { isError: true });
 });
 
-server.listen({ path: socketPath, deleteSocketBeforeListening: true });
+server.listen({
+  path: socketPath,
+  deleteSocketBeforeListening: true,
+  callback() {
+    console.log(`Server running on socket: ${server.socketPath}`);
+  },
+});
 ```
 
 **client.js**
@@ -147,24 +155,29 @@ probably not necessary as unused code gets tree-shaken.
 **server**
 
 ```js
-import { Server } from "express-ipc/server";
-// or
-const { Server } = require("express-ipc/server");
+// es6
+import { default as expressIpc } from "express-ipc/dist/server.js";
+const Server = expressIpc.Server;
+
+// or commonjs:
+const { Server } = require("express-ipc/dist/server");
 ```
 
 **client**
 
 ```js
-import { Client } from "express-ipc/client";
-// or
-const { Client } = require("express-ipc/client");
+import { default as expressIpc } from "express-ipc/dist/client.js";
+const Client = expressIpc.Client;
+
+// or commonjs
+const { Client } = require("express-ipc/dist/client");
 ```
 
 ## API Documentation
 
 Before we start, it is assumed that you are familiar with
 [Express.js](https://www.npmjs.com/package/express) because the route handling
-and path pattern works exactly like Express with very little difference. So, I
+and path pattern work exactly like Express with very little difference. So, I
 would highly recommend you to read the
 [documentation](https://expressjs.com/en/starter/installing.html) of Express
 first.
@@ -173,39 +186,39 @@ first.
 
 1. [Server](#server)
 
-   1. [`Constructor: Server()`](<#constructor%3A-server()>)
-   1. [`server.socketPath`](#server.socketpath)
-   1. [`server.listen()`](<#server.listen()>)
-   1. [`server.close()`](<#server.close()>)
-   1. [`server.createChannels()`](<#server.createchannels()>)
-   1. [`server.deleteChannels()`](<#server.deletechannels()>)
-   1. [`server.broadcast()`](<#server.broadcast()>)
-   1. [`server.on()`](<#server.on()>)
+   1. [`Constructor: Server()`](#constructor-server)
+   1. [`server.socketPath`](#serversocketpath)
+   1. [`server.listen()`](#serverlisten)
+   1. [`server.close()`](#serverclose)
+   1. [`server.createChannels()`](#servercreatechannels)
+   1. [`server.deleteChannels()`](#serverdeletechannels)
+   1. [`server.broadcast()`](#serverbroadcast)
+   1. [`server.on()`](#serveron)
 
 1. [Routing](#routing)
 
    1. [Method](#method)
    1. [Path](#path)
-   1. [Handler/Middleware](#handler-%2F-middleware)
-   1. [Request Object (`req`)](<#request-object-(req)>)
-   1. [Response Object (`res`)](<#response-object-(res)>)
+   1. [Handler/Middleware](#handler--middleware)
+   1. [Request Object (`req`)](#request-object-req)
+   1. [Response Object (`res`)](#response-object-res)
    1. [Next Function (`next`)](#the-next-function)
    1. [Error Handling](#error-handling)
 
 1. [Client](#client)
 
-   1. [`Constructor: Client()`](<#constructor%3A-client()>)
-   1. [`client.subscribe()`](<#client.subscribe()>)
-   1. [`client.unsubscribe()`](<#client.unsubscribe()>)
-   1. [`client.request()`](<#client.request()>)
-   1. [`client.get()`](<#client.get()>)
-   1. [`client.delete()`](<#client.delete()>)
-   1. [`client.post()`](<#client.post()>)
-   1. [`client.patch()`](<#client.patch()>)
-   1. [`client.on()`](<#client.on()>)
+   1. [`Constructor: Client()`](#constructor-client)
+   1. [`client.subscribe()`](#clientsubscribe)
+   1. [`client.unsubscribe()`](#clientunsubscribe)
+   1. [`client.request()`](#clientrequest)
+   1. [`client.get()`](#clientget)
+   1. [`client.delete()`](#clientdelete)
+   1. [`client.post()`](#clientpost)
+   1. [`client.patch()`](#clientpatch)
+   1. [`client.on()`](#clienton)
       1. [Receiving Broadcasts](#receiving-broadcasts)
       1. [Handling Client Errors](#handling-errors)
-   1. [`client.close()`](<#client.on()>)
+   1. [`client.close()`](#clientclose)
 
 ### Server
 
@@ -308,7 +321,7 @@ Go to [Table Of Contents](#table-of-contents)
 
 #### `server.broadcast()`
 
-Broadcasts data to a channel. I takes a single object argument with the
+Broadcasts data to a channel. It takes a single object argument with the
 following interface:
 
 ```ts
@@ -425,7 +438,7 @@ function (arg) {arg.req; arg.res; arg.next}
 // or better, if we destructure them
 function ({req, res, next}) {}
 
-// we can pick only the properties that we need
+// we can only the pick  properties that we are interested in
 function ({req, next}) {}
 ```
 
@@ -448,9 +461,9 @@ function (reqResNextObject, err) {}
 function ({res}, err) {}
 ```
 
-Handler / middleware can be defined in various ways. Suppose that, we have two
-handlers `handler_a`, `handler_b` and an error handler named `error_handler`.
-Then all the following examples are equivalent.
+Handlers / Middlewares can be defined in various ways. Suppose that, we have two
+handlers named `handler_a`, `handler_b` and an error handler named
+`error_handler`. Then all the following examples are equivalent.
 
 **Example: 1**
 
@@ -503,8 +516,8 @@ interface Request {
 ```
 
 All the properties are **readonly** except **path** and **params**. Meaning we
-cannot reassign the readonly properties with new value. If the property is an
-object, we can modify it.
+cannot reassign the readonly properties with new values. But, if the property is
+an object, we can modify it.
 
 **Example:**
 
@@ -539,7 +552,7 @@ interface Response {
 
 | property       | description                                                                                                                                                                                                                                                                                      |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `isSent`       | a getter; returns a boolean value indicating whether the `send` method is already called.                                                                                                                                                                                                        |
+| `isSent`       | a getter; returns a boolean value indicating whether the `send` method has already been called.                                                                                                                                                                                                  |
 | `headers`      | a getter; returns the headers object of the response. Its properties are modifiable.                                                                                                                                                                                                             |
 | `connectionId` | a getter; returns the `connectionId` of the underlying socket. Can be used to blacklist a connection when broadcasting data                                                                                                                                                                      |
 | `send`         | A method to send the response. It takes two optional arguments: first `body` and second `options`. If no argument is provided then the response body will be null. We can use the `isError` flag to mark the response as an error response and the `endConnection` to end the underlying socket. |
@@ -592,7 +605,7 @@ server.get(
     next(new Error("failed"));
   },
   ({ res }, error) => {
-    res.send(/* users */);
+    res.send(/* error response */, {isError: true});
   }
 );
 ```
@@ -608,8 +621,8 @@ an error manually to the `next` function to move to the error handlers.
 
 **Example:**
 
-Suppose that, we have a `getUsers` function that take a callback function. In
-this case we can handle the error like the following.
+Suppose that, we have a `getUsers` function that takes a callback function. In
+this case we can handle the error as shown in the following snippet.
 
 ```js
 server.get("/users", ({ next, res }) => {
@@ -670,11 +683,11 @@ interface ClientConstructor_Argument {
 }
 ```
 
-| property   | default value | description                                                             |
-| ---------- | ------------- | ----------------------------------------------------------------------- |
-| delimiter  | `"\f"`        | See [ServerConstructor_Argument.delimiter](<#constructor%3A-server()>)  |
-| socketRoot | `os.tmpdir()` | See [ServerConstructor_Argument.socketRoot](<#constructor%3A-server()>) |
-| path       |               | See [Listen_Argument.path](<#server.listen()>)                          |
+| property   | default value | description                                                      |
+| ---------- | ------------- | ---------------------------------------------------------------- |
+| delimiter  | `"\f"`        | See [ServerConstructor_Argument.delimiter](#constructor-server)  |
+| socketRoot | `os.tmpdir()` | See [ServerConstructor_Argument.socketRoot](#constructor-server) |
+| path       |               | See [Listen_Argument.path](#serverlisten)                        |
 
 Go to [Table Of Contents](#table-of-contents)
 
@@ -687,6 +700,8 @@ subscribe(
   ...channelsRestArg: (string | string[])[]
 ): Promise<ResponsePayload>
 ```
+
+See [ResponsePayload](#responsepayload)
 
 **Example:**
 
@@ -705,6 +720,8 @@ unsubscribe(
   ...channelsRestArg: (string | string[])[]
 ): Promise<ResponsePayload>
 ```
+
+See [ResponsePayload](#responsepayload)
 
 **Example:**
 
@@ -730,6 +747,8 @@ interface Request_Argument {
 
 type request = (arg: Request_Argument) => Promise<ResponsePayload>;
 ```
+
+See [ResponsePayload](#responsepayload)
 
 Only the `url` and `method` property is required and the rest are optional.
 
@@ -759,6 +778,8 @@ type get = (
 ) => Promise<ResponsePayload>;
 ```
 
+See [ResponsePayload](#responsepayload)
+
 The `other` parameter is optional, so are all of its properties.
 
 **Example:**
@@ -773,8 +794,8 @@ Go to [Table Of Contents](#table-of-contents)
 
 #### `client.delete()`
 
-Sends a request with the request-method set to `"delete"`. It has the exactly
-same signature as the [`client.get()`](<#client.get()>) method.
+Sends a request with the request-method set to `"delete"`. It has exactly
+the same signature as the [`client.get()`](#clientget) method.
 
 Go to [Table Of Contents](#table-of-contents)
 
@@ -793,6 +814,8 @@ type post = (
 ) => Promise<ResponsePayload>;
 ```
 
+See [ResponsePayload](#responsepayload)
+
 For the `client.post` method the second parameter is required and it's `body`
 property is also required.
 
@@ -807,8 +830,8 @@ Go to [Table Of Contents](#table-of-contents)
 
 #### `client.patch()`
 
-Sends a request with the request-method set to `"patch"`. It has the exactly
-same signature as [`client.post()`](<#client.post()>) method.
+Sends a request with the request-method set to `"patch"`. It has exactly
+the same signature as [`client.post()`](#clientpost) method.
 
 **Example:**
 
@@ -868,7 +891,7 @@ closed.
 ## Todo
 
 - [ ] Do thorough testing (currently coverage is `88%`).
-- [ ] Support other data format other than JSON (e.g., Buffer)
+- [ ] Support data formats other than JSON (e.g., Buffer)
 
 ## Development
 
@@ -887,4 +910,4 @@ npm run build
 If you find a bug or want to improve something please feel free to open an
 issue. Pull requests are also welcomed 💝. Finally, if you appreciate me writing
 a docs of 900 liens, please give this project a ⭐ on github. So that, I can
-feel a little better about the time I spent on this project.
+feel a little better about the time I spent/wasted on this project.
