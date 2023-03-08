@@ -25,9 +25,9 @@ export interface GeneralRequestPayload {
   method: "get" | "post" | "delete" | "patch";
 }
 
-export interface GeneralResponsePayload {
-  body: object | null;
-  headers: PlainObject<unknown>;
+export interface GeneralResponsePayload<BodyType = any> {
+  body: BodyType;
+  headers: PlainObject<any>;
 }
 
 export interface GeneralRequest {

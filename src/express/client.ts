@@ -15,9 +15,9 @@ import { createConnection, Socket } from "net";
 import { validateDelimiter } from "../ipc-server/validator";
 import {
   EPP,
-  flattenAndValidateChannelArgs,
   makeSocketPath,
   splitDataIntoChunks,
+  flattenAndValidateChannelArgs,
 } from "../util";
 import { defaults } from "./defaults";
 import { assert } from "handy-types";
@@ -27,35 +27,12 @@ type OptionalArgs = Partial<
 >;
 
 type PostAndPatchArg = Pick<GeneralRequestPayload, "body"> &
-  Pick<GeneralRequestPayload, "query" | "headers">;
+  Partial<Pick<GeneralRequestPayload, "query" | "headers">>;
 
 type MakeRequestObject_Argument = Partial<
   Omit<GeneralRequestPayload, "url" | "method">
 > &
   Pick<GeneralRequestPayload, "url" | "method">;
-
-export interface ExpressIPCClientInterface {
-  request(arg: MakeRequestObject_Argument): Promise<GeneralResponsePayload>;
-  get(url: string, otherArg?: OptionalArgs): Promise<GeneralResponsePayload>;
-  post(url: string, otherArg: PostAndPatchArg): Promise<GeneralResponsePayload>;
-  patch(
-    url: string,
-    otherArg: PostAndPatchArg
-  ): Promise<GeneralResponsePayload>;
-  delete(url: string, otherArg?: OptionalArgs): Promise<GeneralResponsePayload>;
-
-  subscribe(
-    ...channels: (string | string[])[]
-  ): Promise<GeneralResponsePayload>;
-  unsubscribe(
-    ...channels: (string | string[])[]
-  ): Promise<GeneralResponsePayload>;
-
-  on(
-    event: "broadcast",
-    callback: (arg: { channel: string; data: object }) => any
-  ): void;
-}
 
 export interface ExpressIPCClientConstructor_Argument {
   delimiter?: string;
@@ -80,10 +57,7 @@ export const SOCKET_ENDED_ERROR = new EPP({
 });
 Object.freeze(SOCKET_ENDED_ERROR);
 
-export class ExpressIPCClient
-  extends EventEmitter
-  implements ExpressIPCClientInterface
-{
+export class ExpressIPCClient extends EventEmitter {
   readonly #path: string;
   readonly #delimiter: string;
   readonly #socketRoot: string;
@@ -150,6 +124,7 @@ export class ExpressIPCClient
     } catch {}
 
     this.#rejectAllRequests(error);
+    this.emit("socket_error", error);
   };
 
   #rejectAllRequests(error: any) {
@@ -283,17 +258,17 @@ export class ExpressIPCClient
     return this.#enqueueRequest(request);
   }
 
-  async request(
+  async request<BodyType = any>(
     arg: MakeRequestObject_Argument
-  ): Promise<GeneralResponsePayload> {
+  ): Promise<GeneralResponsePayload<BodyType>> {
     const request = this.#makeRequestObject(arg);
     return this.#enqueueRequest(request);
   }
 
-  async get(
+  async get<BodyType = any>(
     url: string,
     otherArg: OptionalArgs = {}
-  ): Promise<GeneralResponsePayload> {
+  ): Promise<GeneralResponsePayload<BodyType>> {
     const request = this.#makeRequestObject({
       url,
       method: "get",
@@ -302,10 +277,10 @@ export class ExpressIPCClient
     return this.#enqueueRequest(request);
   }
 
-  async post(
+  async post<BodyType = any>(
     url: string,
     otherArg: PostAndPatchArg
-  ): Promise<GeneralResponsePayload> {
+  ): Promise<GeneralResponsePayload<BodyType>> {
     const request = this.#makeRequestObject({
       url,
       method: "post",
@@ -314,10 +289,10 @@ export class ExpressIPCClient
     return this.#enqueueRequest(request);
   }
 
-  async patch(
+  async patch<BodyType = any>(
     url: string,
     otherArg: PostAndPatchArg
-  ): Promise<GeneralResponsePayload> {
+  ): Promise<GeneralResponsePayload<BodyType>> {
     const request = this.#makeRequestObject({
       url,
       method: "patch",
@@ -326,10 +301,10 @@ export class ExpressIPCClient
     return this.#enqueueRequest(request);
   }
 
-  async delete(
+  async delete<BodyType = any>(
     url: string,
     otherArg: OptionalArgs = {}
-  ): Promise<GeneralResponsePayload> {
+  ): Promise<GeneralResponsePayload<BodyType>> {
     const request = this.#makeRequestObject({
       url,
       method: "delete",
@@ -380,6 +355,17 @@ export class ExpressIPCClient
       metadata: Object.freeze({ id, category: "general" }),
       payload: Object.freeze({ url, method, body, headers, query }),
     });
+  }
+
+  on(event: "error", cb: (error: Error) => void): this;
+  on(
+    event: "broadcast",
+    cb: (arg: { data: any; channel: string }) => void
+  ): this;
+  on(event: "socket_error", cb: (error: Error) => void): this;
+  on(event: string, cb: (...data: any[]) => void) {
+    super.on(event, cb);
+    return this;
   }
 
   close() {
