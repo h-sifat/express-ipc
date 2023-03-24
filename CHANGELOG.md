@@ -1,3 +1,8 @@
+## v1.0.3
+
+1. Update documentation. Sorry, I didn't get enough time to do it in the
+   previous version.
+
 ## v1.0.2
 
 1. Fix Client request methods type annotations
