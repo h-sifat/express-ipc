@@ -733,6 +733,10 @@ Go to [Table Of Contents](#table-of-contents)
 
 #### `client.request()`
 
+**Tip:** All the request methods (`request`, `get`, ...) are generic, so you can
+specify the body and headers type. I'm just really busy to document them right
+now.
+
 This method can be used to make request to the server. It has the following
 signature:
 
@@ -873,12 +877,14 @@ Go to [Table Of Contents](#table-of-contents)
 
 ##### Handling Errors
 
-Subscribe to the `"error"` event to get notified about any errors.
+Subscribe to the `"socket_error"` event to get notified about any errors on the
+underlying socket. With this event you can get notified if the server quits or
+closes your client connection.
 
 **Example:**
 
 ```js
-client.on("error", (error) => {});
+client.on("socket_error", (error) => {});
 ```
 
 Go to [Table Of Contents](#table-of-contents)
@@ -909,5 +915,5 @@ npm run build
 
 If you find a bug or want to improve something please feel free to open an
 issue. Pull requests are also welcomed 💝. Finally, if you appreciate me writing
-a docs of 900 liens, please give this project a ⭐ on github. So that, I can
+a docs of 900 lines, please give this project a ⭐ on github. So that, I can
 feel a little better about the time I spent/wasted on this project.
