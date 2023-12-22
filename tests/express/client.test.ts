@@ -94,10 +94,10 @@ describe("Error Handling", () => {
           method: "request",
           args: [{ url: "/duck", method: "get" }, { timeout: 30 }],
         },
-        { method: "get", args: [{}, { timeout: 30 }] },
-        { method: "post", args: [{}, { timeout: 30 }] },
-        { method: "patch", args: [{}, { timeout: 30 }] },
-        { method: "delete", args: [{}, { timeout: 30 }] },
+        { method: "get", args: ["/", { timeout: 30 }] },
+        { method: "post", args: ["/", { timeout: 30 }] },
+        { method: "patch", args: ["/", { timeout: 30 }] },
+        { method: "delete", args: ["/", { timeout: 30 }] },
       ])
         it(`rejects request if it times out`, (done) => {
           jest.setTimeout(10_000);
