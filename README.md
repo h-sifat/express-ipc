@@ -733,14 +733,10 @@ Go to [Table Of Contents](#table-of-contents)
 
 #### `client.request()`
 
-**Tip:** All the request methods (`request`, `get`, ...) are generic, so you can
-specify the body and headers type. I'm just really busy to document them right
-now.
-
 This method can be used to make request to the server. It has the following
 signature:
 
-```ts
+```typescript
 interface Request_Argument {
   url: string;
   query?: object;
@@ -749,7 +745,10 @@ interface Request_Argument {
   method: "get" | "post" | "delete" | "patch";
 }
 
-type request = (arg: Request_Argument) => Promise<ResponsePayload>;
+type request = (
+  arg: Request_Argument,
+  options?: { timeout?: number }
+) => Promise<ResponsePayload>;
 ```
 
 See [ResponsePayload](#responsepayload)
@@ -760,6 +759,36 @@ Only the `url` and `method` property is required and the rest are optional.
 
 ```js
 const users = await client.request({ url: "/users", method: "get" });
+```
+
+We can also provide a timeout (in **milliseconds**) for the request. If the
+server doesn't respond within time then the request will be rejected with a
+timeout error.
+
+```js
+const users = await client.request(
+  { url: "/users", method: "get" },
+  { timeout: 1000 }
+);
+```
+
+**Note:** If the response does arrive after the request has been timed out,
+an `"unhandled_response"` event will be emitted.
+
+**Tip:** All the request methods (`request`, `get`, ...) are generic, so you can
+specify the body and headers type. I'm really busy to document them right now.
+
+```ts
+interface User {
+  name: string;
+  email: string;
+}
+
+const users = await client.request<User[]>({
+  url: "/users",
+  method: "get",
+});
+// typeof users: Users[]
 ```
 
 Go to [Table Of Contents](#table-of-contents)
@@ -777,6 +806,7 @@ type get = (
   other?: {
     query?: object;
     headers?: object;
+    timeout?: number;
     body?: object | null;
   }
 ) => Promise<ResponsePayload>;
@@ -813,6 +843,7 @@ type post = (
   other: {
     query?: object;
     headers?: object;
+    timeout?: number;
     body: object | null;
   }
 ) => Promise<ResponsePayload>;
@@ -849,9 +880,14 @@ Go to [Table Of Contents](#table-of-contents)
 
 #### `client.on()`
 
-The `Client` class inherits from the `EventEmitter` class. It only emits two
-events: `"error"` and `"broadcast"`. We can use the `client.on` method to
-subscribe to these events.
+The `Client` class inherits from the `EventEmitter` class. It emits the
+following events.
+
+1. `"error"`: mostly for socket errors
+1. `"broadcast`: for receiving broadcast
+1. `"unhandled_response"`: for timed out requests
+
+We can use the `client.on` method to subscribe to these events.
 
 Go to [Table Of Contents](#table-of-contents)
 
@@ -896,7 +932,7 @@ closed.
 
 ## Todo
 
-- [ ] Do thorough testing (currently coverage is `88%`).
+- [ ] Do thorough testing (currently coverage is `90%`).
 - [ ] Support data formats other than JSON (e.g., Buffer)
 
 ## Development
