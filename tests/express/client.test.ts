@@ -3,6 +3,7 @@ import {
   SOCKET_ENDED_ERROR,
   MANUAL_SOCKET_CLOSE_ERROR,
   ExpressIPCClientConstructor_Argument,
+  REQUEST_TIMEOUT_ERROR,
 } from "../../src/express/client";
 
 import { tmpdir } from "os";
@@ -13,21 +14,21 @@ import { defaults } from "../../src/express/defaults";
 import { GeneralRequestResponse } from "../../src/interface";
 import path from "path";
 
-describe("Error Handline", () => {
+describe("Error Handling", () => {
   const socketPath = makeSocketPath({
     socketRoot: tmpdir(),
     path: { namespace: "testing_express_ipc_client", id: randomUUID() },
   });
 
   let server: Server;
-  let clientSocket: Socket;
+  let serverSocket: Socket;
   let expressClient: ExpressIPCClient;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     await (() =>
       new Promise((resolve) => {
         server = createServer((_socket) => {
-          clientSocket = _socket;
+          serverSocket = _socket;
           resolve();
         });
 
@@ -37,18 +38,9 @@ describe("Error Handline", () => {
       }) as Promise<void>)();
   });
 
-  beforeEach(() => {
-    clientSocket.removeAllListeners("end");
-    clientSocket.removeAllListeners("data");
-    clientSocket.removeAllListeners("close");
-    clientSocket.removeAllListeners("error");
-
-    expressClient.removeAllListeners("error");
-  });
-
-  afterAll(() => {
-    server.close();
+  afterEach(() => {
     expressClient.close();
+    server.close();
   });
 
   describe("Invalid Response", () => {
@@ -68,22 +60,22 @@ describe("Error Handline", () => {
           }
         });
 
-        clientSocket.write(`invalid_json${defaults.delimiter}`);
+        serverSocket.write(`invalid_json${defaults.delimiter}`);
       });
     }
 
     {
       const errorCode = "INVALID_RESPONSE:UNKNOWN_ID";
 
-      it(`emits an error event with an ewc "${errorCode}" if the server responds with unknown request id`, (done) => {
+      it(`emits an "unhandled_response" event with an ewc "${errorCode}" if server returns unknown id`, (done) => {
         const response: GeneralRequestResponse = Object.freeze({
           metadata: { id: "1424524", category: "general", isError: false },
           payload: { headers: {}, body: {} },
         });
 
-        expressClient.on("error", (error) => {
+        expressClient.on("unhandled_response", (data) => {
           try {
-            expect(error).toMatchObject({
+            expect(data.error).toMatchObject({
               code: errorCode,
               message: expect.any(String),
             });
@@ -94,9 +86,109 @@ describe("Error Handline", () => {
           }
         });
 
-        clientSocket.write(`${JSON.stringify(response)}${defaults.delimiter}`);
+        serverSocket.write(`${JSON.stringify(response)}${defaults.delimiter}`);
       });
+
+      for (const { method, args } of [
+        {
+          method: "request",
+          args: [{ url: "/duck", method: "get" }, { timeout: 30 }],
+        },
+        { method: "get", args: [{}, { timeout: 30 }] },
+        { method: "post", args: [{}, { timeout: 30 }] },
+        { method: "patch", args: [{}, { timeout: 30 }] },
+        { method: "delete", args: [{}, { timeout: 30 }] },
+      ])
+        it(`rejects request if it times out`, (done) => {
+          jest.setTimeout(10_000);
+
+          const response: GeneralRequestResponse = Object.freeze({
+            metadata: { id: "1424524", category: "general", isError: false },
+            payload: { headers: {}, body: {} },
+          });
+
+          expressClient.on("unhandled_response", (data) => {
+            try {
+              expect(data.error).toMatchObject({
+                code: errorCode,
+                message: expect.any(String),
+              });
+
+              done();
+            } catch (ex) {
+              done(ex);
+            }
+          });
+
+          expressClient[method](...args).catch((error: any) => {
+            expect(error.code).toBe(REQUEST_TIMEOUT_ERROR.code);
+          });
+
+          setTimeout(() => {
+            serverSocket.write(
+              `${JSON.stringify(response)}${defaults.delimiter}`
+            );
+          }, 200);
+        });
     }
+  });
+
+  describe("Request timeout", () => {
+    const setTimeoutMock = jest.fn();
+    const clearTimeoutMock = jest.fn();
+
+    let localExpressClient: ExpressIPCClient;
+
+    beforeEach(() => {
+      localExpressClient = new ExpressIPCClient({
+        path: socketPath,
+        setTimeout: setTimeoutMock,
+        clearTimeout: clearTimeoutMock,
+      });
+    });
+
+    afterEach(() => {
+      localExpressClient.close();
+    });
+
+    it(`clears the timeout if response arrives in time`, (done) => {
+      jest.setTimeout(10_000);
+      const response: GeneralRequestResponse = Object.freeze({
+        // the first request id will be 1
+        metadata: { id: "1", category: "general", isError: false },
+        payload: { headers: {}, body: {} },
+      });
+
+      const timeout = 100;
+      const fakeTimerId = "timer";
+      setTimeoutMock.mockReturnValueOnce(fakeTimerId);
+
+      localExpressClient
+        .request({ url: "/duck", method: "get" }, { timeout })
+        .then((resp) => {
+          try {
+            expect(setTimeoutMock).toHaveBeenCalledTimes(1);
+            expect(setTimeoutMock).toHaveBeenCalledWith(
+              expect.any(Function),
+              timeout
+            );
+
+            expect(clearTimeoutMock).toHaveBeenCalledTimes(1);
+            expect(clearTimeoutMock).toHaveBeenCalledWith(fakeTimerId);
+
+            done();
+          } catch (ex) {
+            done(ex);
+          }
+        })
+        .catch((error) => {
+          done(error);
+        });
+
+      setTimeout(() => {
+        serverSocket.write(`${JSON.stringify(response)}${defaults.delimiter}`);
+      }, 100);
+    });
   });
 
   describe("Socket Error", () => {
@@ -156,7 +248,7 @@ describe("Error Handline", () => {
         });
 
       // manually ending the client socket from the server side
-      clientSocket.end();
+      serverSocket.end();
     });
   });
 });

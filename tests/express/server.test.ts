@@ -132,7 +132,7 @@ describe("broadcast", () => {
 describe("Handling Invalid Requests", () => {
   let socket: Socket;
 
-  const parseResponseData = (buffer: Buffer) => {
+  const parseRequestData = (buffer: Buffer) => {
     const data = buffer.toString().slice(0, -1);
     return JSON.parse(data);
   };
@@ -160,7 +160,7 @@ describe("Handling Invalid Requests", () => {
 
       socket.on("data", (buffer: Buffer) => {
         try {
-          const response = parseResponseData(buffer);
+          const response = parseRequestData(buffer);
 
           expect(response).toEqual({
             metadata: {
@@ -191,7 +191,7 @@ describe("Handling Invalid Requests", () => {
 
       socket.on("data", (buffer) => {
         try {
-          const response = parseResponseData(buffer);
+          const response = parseRequestData(buffer);
 
           expect(response).toEqual({
             metadata: {
@@ -228,7 +228,7 @@ describe("Handling Invalid Requests", () => {
 
       socket.on("data", (buffer: Buffer) => {
         try {
-          const response = parseResponseData(buffer);
+          const response = parseRequestData(buffer);
 
           expect(response).toEqual({
             metadata: { ...request.metadata, isError: true },

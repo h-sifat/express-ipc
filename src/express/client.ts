@@ -22,26 +22,44 @@ import {
 import { defaults } from "./defaults";
 import { assert } from "handy-types";
 
+interface RequestOptions {
+  timeout?: number;
+}
+
 type OptionalArgs = Partial<
   Pick<GeneralRequestPayload, "query" | "headers" | "body">
->;
+> & { timeout?: number };
 
 type PostAndPatchArg = Pick<GeneralRequestPayload, "body"> &
-  Partial<Pick<GeneralRequestPayload, "query" | "headers">>;
+  Partial<Pick<GeneralRequestPayload, "query" | "headers">> & {
+    timeout?: number;
+  };
 
 type MakeRequestObject_Argument = Partial<
   Omit<GeneralRequestPayload, "url" | "method">
 > &
-  Pick<GeneralRequestPayload, "url" | "method">;
+  Pick<GeneralRequestPayload, "url" | "method"> & {
+    timeout?: number;
+  };
 
 export interface ExpressIPCClientConstructor_Argument {
   delimiter?: string;
   socketRoot?: string;
   path: Listen_Argument["path"];
+
+  /**
+   * Only used for testing. Don't provide this arg.
+   * */
+  clearTimeout?: (id: any) => void;
+  /**
+   * Only used for testing. Don't provide this arg.
+   * */
+  setTimeout?: (f: (...args: any[]) => any, duration: number) => number;
 }
 
 type Query = {
   request: SocketRequest;
+  timeout?: { id?: any; duration: number };
   promise: { reject: Function; resolve: Function };
 };
 
@@ -57,6 +75,11 @@ export const SOCKET_ENDED_ERROR = new EPP({
 });
 Object.freeze(SOCKET_ENDED_ERROR);
 
+export const REQUEST_TIMEOUT_ERROR = new EPP({
+  code: "REQUEST_TIMEOUT",
+  message: `The request has timed out.`,
+});
+
 export class ExpressIPCClient extends EventEmitter {
   readonly #path: string;
   readonly #delimiter: string;
@@ -66,8 +89,16 @@ export class ExpressIPCClient extends EventEmitter {
   readonly #queryQueue: Query[] = [];
   readonly #queriesWaitingForResponse: Map<string, Query> = new Map();
 
+  readonly #setTimeout: Required<ExpressIPCClientConstructor_Argument>["setTimeout"] =
+    setTimeout;
+  readonly #clearTimeout: Required<ExpressIPCClientConstructor_Argument>["clearTimeout"] =
+    clearTimeout;
+
   #dataBuffer = "";
+
+  // @warning don't set this to anything but 1. One of the test depends on it.
   #currentRequestId = 1;
+
   #socketEnded = false;
   #isSocketWritable = false;
   #isSendingRequests = false;
@@ -83,6 +114,9 @@ export class ExpressIPCClient extends EventEmitter {
       name: "socketRoot",
       code: "INVALID_SOCKET_ROOT",
     });
+
+    if (arg.setTimeout) this.#setTimeout = arg.setTimeout;
+    if (arg.clearTimeout) this.#clearTimeout = arg.clearTimeout;
 
     this.#path = makeSocketPath({
       path: arg.path as any,
@@ -133,6 +167,7 @@ export class ExpressIPCClient extends EventEmitter {
       this.#queriesWaitingForResponse.delete(id);
 
       query.promise.reject(error);
+      if (query.timeout) clearTimeout(query.timeout.id);
     }
 
     while (this.#queryQueue.length) {
@@ -163,9 +198,17 @@ export class ExpressIPCClient extends EventEmitter {
       }
 
       this.#socket.write(serializedRequest, (error) => {
-        if (error) query.promise.reject(error);
-        else
-          this.#queriesWaitingForResponse.set(query.request.metadata.id, query);
+        if (error) return query.promise.reject(error);
+
+        const queryId = query.request.metadata.id;
+        this.#queriesWaitingForResponse.set(queryId, query);
+
+        if (query.timeout) {
+          query.timeout.id = this.#setTimeout(() => {
+            this.#queriesWaitingForResponse.delete(queryId);
+            query.promise.reject(REQUEST_TIMEOUT_ERROR);
+          }, query.timeout.duration);
+        }
       });
     }
 
@@ -218,12 +261,16 @@ export class ExpressIPCClient extends EventEmitter {
     if (!query) {
       const error = new EPP({
         code: "INVALID_RESPONSE:UNKNOWN_ID",
-        message: `The server returned response with an unknown request id.`,
+        message:
+          `The server returned response with an unknown request id.` +
+          ` Probably the request timed out?`,
       });
-      this.emit("error", error);
+      this.emit("unhandled_response", { response, responseId: id, error });
 
       return;
     }
+
+    if (query.timeout) this.#clearTimeout(query.timeout.id);
 
     if (response.metadata.isError) query.promise.reject(response.payload);
     else query.promise.resolve(response.payload);
@@ -259,68 +306,75 @@ export class ExpressIPCClient extends EventEmitter {
   }
 
   async request<BodyType = any>(
-    arg: MakeRequestObject_Argument
+    arg: MakeRequestObject_Argument,
+    options: RequestOptions = {}
   ): Promise<GeneralResponsePayload<BodyType>> {
     const request = this.#makeRequestObject(arg);
-    return this.#enqueueRequest(request);
+
+    if ("timeout" in options) {
+      const { timeout } = options;
+      assert<number>("non_negative_number", timeout, { name: "timeout" });
+
+      return this.#enqueueRequest(request, { timeoutDuration: timeout });
+    } else return this.#enqueueRequest(request);
   }
 
   async get<BodyType = any>(
     url: string,
     otherArg: OptionalArgs = {}
   ): Promise<GeneralResponsePayload<BodyType>> {
-    const request = this.#makeRequestObject({
-      url,
-      method: "get",
-      ...otherArg,
-    });
-    return this.#enqueueRequest(request);
+    const requestOptions: RequestOptions = {};
+    if (otherArg.timeout) requestOptions.timeout = otherArg.timeout;
+
+    return this.request({ url, method: "get", ...otherArg }, requestOptions);
   }
 
   async post<BodyType = any>(
     url: string,
     otherArg: PostAndPatchArg
   ): Promise<GeneralResponsePayload<BodyType>> {
-    const request = this.#makeRequestObject({
-      url,
-      method: "post",
-      ...otherArg,
-    });
-    return this.#enqueueRequest(request);
+    const requestOptions: RequestOptions = {};
+    if (otherArg.timeout) requestOptions.timeout = otherArg.timeout;
+
+    return this.request({ url, method: "post", ...otherArg }, requestOptions);
   }
 
   async patch<BodyType = any>(
     url: string,
     otherArg: PostAndPatchArg
   ): Promise<GeneralResponsePayload<BodyType>> {
-    const request = this.#makeRequestObject({
-      url,
-      method: "patch",
-      ...otherArg,
-    });
-    return this.#enqueueRequest(request);
+    const requestOptions: RequestOptions = {};
+    if (otherArg.timeout) requestOptions.timeout = otherArg.timeout;
+
+    return this.request({ url, method: "patch", ...otherArg }, requestOptions);
   }
 
   async delete<BodyType = any>(
     url: string,
     otherArg: OptionalArgs = {}
   ): Promise<GeneralResponsePayload<BodyType>> {
-    const request = this.#makeRequestObject({
-      url,
-      method: "delete",
-      ...otherArg,
-    });
-    return this.#enqueueRequest(request);
+    const requestOptions: RequestOptions = {};
+    if (otherArg.timeout) requestOptions.timeout = otherArg.timeout;
+
+    return this.request({ url, method: "delete", ...otherArg }, requestOptions);
   }
 
-  #enqueueRequest(request: SocketRequest): Promise<GeneralResponsePayload> {
+  #enqueueRequest(
+    request: SocketRequest,
+    options: { timeoutDuration?: number } = {}
+  ): Promise<GeneralResponsePayload> {
     if (this.#socketEnded) return Promise.reject(SOCKET_ENDED_ERROR);
 
     return new Promise((resolve, reject) => {
-      const queueElement: Query = Object.freeze({
+      const queueElement: Query = {
         request,
         promise: Object.freeze({ resolve, reject }),
-      });
+      };
+
+      if (options.timeoutDuration)
+        queueElement.timeout = { duration: options.timeoutDuration };
+
+      Object.freeze(queueElement);
 
       this.#queryQueue.push(queueElement);
       this.#sendRequests();
@@ -357,12 +411,20 @@ export class ExpressIPCClient extends EventEmitter {
     });
   }
 
-  on(event: "error", cb: (error: Error) => void): this;
   on(
     event: "broadcast",
     cb: (arg: { data: any; channel: string }) => void
   ): this;
   on(event: "socket_error", cb: (error: Error) => void): this;
+  on(
+    event: "unhandled_response",
+    cb: (data: {
+      error: EPP;
+      responseId: number;
+      response: GeneralResponsePayload;
+    }) => void
+  ): this;
+  on(event: "error", cb: (error: Error) => void): this;
   on(event: string, cb: (...data: any[]) => void) {
     super.on(event, cb);
     return this;

@@ -33,6 +33,7 @@ export interface GeneralResponsePayload<BodyType = any> {
 export interface GeneralRequest {
   payload: GeneralRequestPayload;
   metadata: RequestMetaData<"general">;
+  timeout?: { id?: any; duration: number };
 }
 
 export interface SubscribeChannelsRequest {
