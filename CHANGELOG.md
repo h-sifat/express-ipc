@@ -1,3 +1,7 @@
+## v1.1.0
+
+1. Add request timeout option to the client.
+
 ## v1.0.3
 
 1. Update documentation. Sorry, I didn't get enough time to do it in the
